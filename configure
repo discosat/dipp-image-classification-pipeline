@@ -26,12 +26,12 @@ echo "option('cross-compile', type : 'boolean', value : $cross_compile_value, de
 # Clean and setup the build directory
 rm -rf builddir
 if $cross_compile_value = "true"; then
-    meson setup builddir --cross-file linux-aarch64.txt
+    meson setup builddir --cross-file yocto_cross.ini
 else 
     meson setup . builddir
 fi
 
 # Navigate to the build directory and build the project
-ninja -C builddir
+ninja -j 4 -C builddir 
 
 exit 0

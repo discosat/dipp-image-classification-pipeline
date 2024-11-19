@@ -23,9 +23,9 @@ void module()
         append_result_image(result_image_data, output_size);
 
         /* Code for saving webp to file */
-        // FILE *outfile = fopen("output.webp", "wb");
-        // fwrite(result_image_data, 1, output_size, outfile);
-        // fclose(outfile);
+        FILE *outfile = fopen("output.webp", "wb");
+        fwrite(result_image_data, 1, output_size, outfile);
+        fclose(outfile);
     }
 }
 

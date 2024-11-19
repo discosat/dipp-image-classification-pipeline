@@ -26,10 +26,10 @@ void module()
         cv::Mat demosaicedImage_1byte;
         cv::normalize(demosaicedImage, demosaicedImage_1byte, 0, 255, 32, CV_8UC3);
 
-        // fs::path dir ("./");
-        // fs::path file ("image_" + std::to_string(std::time(0)) + "_" + std::to_string(i) + ".png");
-        // std::string full_path = (dir / file).string();
-        // imwrite(full_path, demosaicedImage);
+        fs::path dir ("/home/root/demosaiced/");
+        fs::path file ("image_" + std::to_string(std::time(0)) + "_" + std::to_string(i) + ".png");
+        std::string full_path = (dir / file).string();
+        imwrite(full_path, demosaicedImage);
 
         Metadata new_meta = METADATA__INIT;
         new_meta.channels = 3;
