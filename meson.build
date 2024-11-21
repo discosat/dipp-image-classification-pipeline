@@ -52,6 +52,15 @@ shared_library(
     dependencies: [rt_dep, proto_c_dep, opencv_dep],
 )
 
+# Shared library (SO)
+shared_library(
+    'single_module',
+    ['src/single_module.cpp'] + sources,
+    include_directories: dirs,
+    c_args: cflags + ['-DSHARED_MEMORY=1'],
+    dependencies: [rt_dep, proto_c_dep, opencv_dep, tflite_dep, jxl_dep],
+)
+
 # Check for cross-compiling
 if not get_option('cross-compile')
     # If not cross-compiling, include the executable target

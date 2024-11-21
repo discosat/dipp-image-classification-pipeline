@@ -10,13 +10,13 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3)
+    if (argc < 4)
     {
-        printf("Missing arguments: Expected <num_images> <image_name>");
+        printf("Missing arguments: Expected <num_images> <pipeline_id> <image_name>");
         return -1;
     }
 
-    char * image_name = argv[2];
+    char * image_name = argv[3];
 
     // Get timestamp (used for SHM key)
     struct timespec time;
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     ImageBatch data;
     data.mtype = 1;
     data.num_images = atoi(argv[1]);
-    data.pipeline_id = 1;
+    data.pipeline_id = atoi(argv[2]);
 
     // Hardcoded bayer image specs
     uint32_t image_height = 2056;
