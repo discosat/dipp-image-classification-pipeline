@@ -110,11 +110,6 @@ void module()
     auto output_size = output_dims->data[output_dims->size - 1];
     logger_log(logger, LOG_INFO, "Got output dimensions.");
 
-    // Initialize encoder.
-    logger_log(logger, LOG_INFO, "Initializing encoder.");
-    JxlEncoderPtr encoder = JxlEncoderMake(nullptr);
-    logger_log(logger, LOG_INFO, "Initialized encoder.");
-
     for (int i = 0; i < input->num_images; i++)
     {
         logger_log(logger, LOG_INFO, "Full image started");
@@ -152,21 +147,21 @@ void module()
         uint16_t height = demosaicedImage_1byte.size().height;
         uint16_t width = demosaicedImage_1byte.size().width;
 
+        // Define the arrays that store patches to be passed to next modules
+        logger_log(logger, LOG_INFO, "allocating output image data.");
+        uint8_t *output_image_data = (uint8_t *)malloc(tile_bytes);
+        logger_log(logger, LOG_INFO, "allocated output image data.");
+
+        /* Check for malloc error */
+        if (output_image_data == NULL)
+        {
+            signal_error_and_exit(MALLOC_ERR);
+        }
+
         for (uint16_t height_offset = 0; height_offset + tile_size <= height; height_offset += tile_size)
         {
             for (uint16_t width_offset = 0; width_offset + tile_size <= width; width_offset += tile_size)
             {
-
-                // Define the arrays that store patches to be passed to next modules
-                logger_log(logger, LOG_INFO, "allocating output image data.");
-                uint8_t *output_image_data = (uint8_t *)malloc(tile_bytes);
-                logger_log(logger, LOG_INFO, "allocated output image data.");
-
-                /* Check for malloc error */
-                if (output_image_data == NULL)
-                {
-                    signal_error_and_exit(MALLOC_ERR);
-                }
 
                 logger_log(logger, LOG_INFO, "Copying image data.");
                 for (uint16_t h = height_offset; h < tile_size + height_offset; h++)
@@ -214,6 +209,11 @@ void module()
                 // send only 20% of the patches
                 if (tile_idx % 5 == 0)
                 {
+                    // Initialize encoder.
+                    logger_log(logger, LOG_INFO, "Initializing encoder.");
+                    JxlEncoderPtr encoder = JxlEncoderMake(nullptr);
+                    logger_log(logger, LOG_INFO, "Initialized encoder.");
+
                     // Set basic information about the image.
                     logger_log(logger, LOG_INFO, "Initializing basic info.");
                     JxlPixelFormat pixel_format = {channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0}; // RGB, 8-bit
@@ -250,7 +250,7 @@ void module()
 
                     // Set the image buffer.
                     logger_log(logger, LOG_INFO, "Adding image frame.");
-                    if (JxlEncoderAddImageFrame(frame_settings, &pixel_format, output_image_data, size) != JXL_ENC_SUCCESS)
+                    if (JxlEncoderAddImageFrame(frame_settings, &pixel_format, output_image_data, tile_bytes) != JXL_ENC_SUCCESS)
                     {
                         std::cerr << "Failed to add image frame." << std::endl;
                         signal_error_and_exit(FRAME_ERR);
@@ -302,16 +302,23 @@ void module()
                     logger_log(logger, LOG_INFO, "Appended image to result batch.");
                 }
                 tile_idx++;
-
-                // Free the tile memory
-                free(output_image_data);
             }
         }
 
-        delete[] image_buffer;
+        // Free the tile memory
+        logger_log(logger, LOG_INFO, "Freeing tile memory.");
+        free(output_image_data);
+        logger_log(logger, LOG_INFO, "Freed tile memory.");
+
+        // Free the input image
+        logger_log(logger, LOG_INFO, "Freeing input memory.");
+        free(image_buffer);
+        logger_log(logger, LOG_INFO, "Freed input memory.");
+
         logger_log(logger, LOG_INFO, "Full image finished");
     }
     logger_log(logger, LOG_INFO, "Single module finished");
+    logger_flush(logger);
     logger_destroy(logger);
 }
 /* END MODULE IMPLEMENTATION */

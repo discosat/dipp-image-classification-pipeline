@@ -33,11 +33,6 @@ void module()
 
     logger_log(logger, LOG_INFO, "JPEGXL module started");
 
-    // Initialize encoder.
-    logger_log(logger, LOG_INFO, "Initializing encoder.");
-    JxlEncoderPtr encoder = JxlEncoderMake(nullptr);
-    logger_log(logger, LOG_INFO, "Initialized encoder.");
-
     for (int i = 0; i < input->num_images; i++)
     {
         logger_log(logger, LOG_INFO, "Full image started");
@@ -56,6 +51,11 @@ void module()
         uint8_t *image_buffer;
         size_t size = get_image_data(i, &image_buffer);
         logger_log(logger, LOG_INFO, "Got image data.");
+
+        // Initialize encoder.
+        logger_log(logger, LOG_INFO, "Initializing encoder.");
+        JxlEncoderPtr encoder = JxlEncoderMake(nullptr);
+        logger_log(logger, LOG_INFO, "Initialized encoder.");
 
         // Set basic information about the image.
         logger_log(logger, LOG_INFO, "Initializing basic info.");
@@ -107,7 +107,7 @@ void module()
         std::vector<uint8_t> compressed_data;
 
         // Encode the image.
-        logger_log(logger, LOG_INFO, "Encodeing image.");
+        logger_log(logger, LOG_INFO, "Encoding image.");
         uint8_t buffer[4096];
         while (true)
         {
@@ -158,7 +158,8 @@ void module()
         free(image_buffer);
         logger_log(logger, LOG_INFO, "Full image finished");
     }
-    logger_log(logger, LOG_INFO, "TFlite module finished");
+    logger_log(logger, LOG_INFO, "JPEGXL module finished");
+    logger_flush(logger);
     logger_destroy(logger);
 }
 /* END MODULE IMPLEMENTATION */

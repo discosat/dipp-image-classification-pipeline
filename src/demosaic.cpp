@@ -15,7 +15,7 @@ enum ERROR_CODE
 void module()
 {
     fs::path dir("/home/root/logs/");
-    fs::path file_name("encode_" + std::to_string(std::time(0)) + ".txt");
+    fs::path file_name("demosaic_" + std::to_string(std::time(0)) + ".txt");
     std::string full_path = (dir / file_name).string();
     Logger *logger = logger_create(full_path.c_str());
 
@@ -68,10 +68,15 @@ void module()
         append_result_image(demosaicedImage_1byte.data, new_meta.size, &new_meta);
         logger_log(logger, LOG_INFO, "Appended image to result batch.");
 
-        delete[] image_buffer;
+        // Free the input image
+        logger_log(logger, LOG_INFO, "Freeing input memory.");
+        free(image_buffer);
+        logger_log(logger, LOG_INFO, "Freed input memory.");
+
         logger_log(logger, LOG_INFO, "Full image finished");
     }
-    logger_log(logger, LOG_INFO, "TFlite module finished");
+    logger_log(logger, LOG_INFO, "Demosaic module finished");
+    logger_flush(logger);
     logger_destroy(logger);
 }
 /* END MODULE IMPLEMENTATION */

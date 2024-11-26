@@ -4,7 +4,7 @@
 #include <time.h>
 #include <string.h>
 
-#define TIMESTAMP_SIZE 32
+#define TIMESTAMP_SIZE 35
 #define MAX_LOG_LENGTH 1024
 
 struct Logger {
@@ -47,13 +47,22 @@ void logger_destroy(Logger* logger) {
     }
 }
 
+#define BUFFER_SIZE 10000
+
+typedef struct {
+    char log_entries[BUFFER_SIZE][MAX_LOG_LENGTH];
+    int count;
+} LogBuffer;
+
+static LogBuffer log_buffer = { .count = 0 };
+
 void logger_log(Logger* logger, LogLevel level, const char* message) {
     if (!logger || !logger->log_file) {
         return;
     }
 
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     
     // Convert to tm structure
     struct tm* timeinfo = localtime(&ts.tv_sec);
@@ -61,18 +70,27 @@ void logger_log(Logger* logger, LogLevel level, const char* message) {
     size_t base_len = strftime(timestamp, sizeof(timestamp), 
                               "%Y-%m-%d %H:%M:%S", timeinfo);
     
-    // Add milliseconds to timestamp
+    // Add microseconds to timestamp
     snprintf(timestamp + base_len, sizeof(timestamp) - base_len, 
-             ".%03ld", ts.tv_nsec / 1000000);
+             ".%06ld", ts.tv_nsec / 1000);
 
-    char log_entry[MAX_LOG_LENGTH];
-    snprintf(log_entry, sizeof(log_entry), "[%s] %s: %s\n",
-             timestamp, level_to_string(level), message);
+    snprintf(log_buffer.log_entries[log_buffer.count], MAX_LOG_LENGTH, 
+             "[%s] %s: %s\n", timestamp, level_to_string(level), message);
+
+    log_buffer.count++;
 
     // Output to console
-    printf("%s", log_entry);
+    // printf("%s", log_buffer.log_entries[log_buffer.count - 1]);
+}
 
-    // Output to file
-    fprintf(logger->log_file, "%s", log_entry);
+void logger_flush(Logger* logger) {
+    if (!logger || !logger->log_file) {
+        return;
+    }
+
+    for (int i = 0; i < log_buffer.count; i++) {
+        fprintf(logger->log_file, "%s", log_buffer.log_entries[i]);
+    }
     fflush(logger->log_file);
+    log_buffer.count = 0;
 }
