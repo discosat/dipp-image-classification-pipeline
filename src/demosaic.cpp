@@ -19,7 +19,7 @@ void module()
     std::string full_path = (dir / file_name).string();
     Logger *logger = logger_create(full_path.c_str());
 
-    logger_log(logger, LOG_INFO, "Demosaic module started");
+    logger_log_print(logger, LOG_INFO, "Demosaic module started");
 
     for (int i = 0; i < input->num_images; i++)
     {
@@ -75,7 +75,7 @@ void module()
 
         logger_log(logger, LOG_INFO, "Full image finished");
     }
-    logger_log(logger, LOG_INFO, "Demosaic module finished");
+    logger_log_print(logger, LOG_INFO, "Demosaic module finished");
     logger_flush(logger);
     logger_destroy(logger);
 }

@@ -27,7 +27,7 @@ void module()
     std::string full_path = (dir / file_name).string();
     Logger *logger = logger_create(full_path.c_str());
 
-    logger_log(logger, LOG_INFO, "TFlite module started");
+    logger_log_print(logger, LOG_INFO, "TFlite module started");
 
     /* Get number of images in input batch */
     logger_log(logger, LOG_INFO, "Getting number of images in input batch.");
@@ -70,6 +70,15 @@ void module()
     logger_log(logger, LOG_INFO, "Loading delegate");
     auto ext_delegate_option =
         TfLiteExternalDelegateOptionsDefault("/usr/lib/libvx_delegate.so");
+
+    // set the caching options
+    // const char *allow_cache_key = "allowed_cache_mode";
+    // const char *allow_cache_value = "true";
+    // const char *cache_file_key = "cache_file_path";
+    // const char *cache_file_value = "/tmp/vx_cache";
+    // ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
+    // ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
+
     auto ext_delegate_ptr = TfLiteExternalDelegateCreate(&ext_delegate_option);
     logger_log(logger, LOG_INFO, "Delegate loaded.");
 
@@ -226,7 +235,7 @@ void module()
         logger_log(logger, LOG_INFO, "Full image finished");
     }
 
-    logger_log(logger, LOG_INFO, "TFlite module finished");
+    logger_log_print(logger, LOG_INFO, "TFlite module finished");
     logger_flush(logger);
     logger_destroy(logger);
 }

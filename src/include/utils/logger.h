@@ -23,6 +23,8 @@ void logger_destroy(Logger* logger);
 // Log a message
 void logger_log(Logger* logger, LogLevel level, const char* message);
 
+void logger_log_print(Logger* logger, LogLevel level, const char* message);
+
 void logger_flush(Logger* logger);
 
 #ifdef __cplusplus
