@@ -18,9 +18,9 @@ void finalize()
     uuid_generate_random(uuid);
     uuid_unparse_lower(uuid, file_uuid);
 
-    char filename_prefix[] = "/usr/share/dipp/data/batch_%s.bin";
-    char batch_filename[sizeof(filename_prefix) + 37];
-    snprintf(batch_filename, sizeof(filename_prefix) + 37, filename_prefix, file_uuid);
+    char filename_prefix[] = "/usr/share/dipp/data/batch_%s_%s.bin";
+    char batch_filename[sizeof(filename_prefix) + 37 + 37];
+    snprintf(batch_filename, sizeof(filename_prefix) + 37 + 37, filename_prefix, input->uuid, file_uuid);
 
     int fd = open(batch_filename, O_RDWR | O_CREAT, 0644);
     if (fd < 0)

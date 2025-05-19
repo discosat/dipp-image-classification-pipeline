@@ -91,6 +91,7 @@ void initialize()
     result->num_images = 0;
     result->pipeline_id = input->pipeline_id;
     result->priority = input->priority;
+    strcpy(result->uuid, input->uuid);
     get_batch_data();
     unpack_metadata();
 }

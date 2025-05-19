@@ -47,6 +47,13 @@ int main(int argc, char *argv[])
     data.priority = atoi(argv[3]); // max_timestamp (in seconds)
     data.progress = -1;            // default progress
 
+    char batch_uuid[37];
+    uuid_t uuid;
+    uuid_generate_random(uuid);
+    uuid_unparse_lower(uuid, batch_uuid);
+
+    strcpy(data.uuid, batch_uuid);
+
     // Hardcoded bayer image specs
     uint32_t image_height = 2056;
     uint32_t image_width = 2464;
@@ -73,14 +80,13 @@ int main(int argc, char *argv[])
 
     uint32_t batch_size = (image_size + sizeof(uint32_t) + meta_size) * data.num_images;
 
-    char *file_uuid = malloc(37);
-    uuid_t uuid;
+    char file_uuid[37];
     uuid_generate_random(uuid);
     uuid_unparse_lower(uuid, file_uuid);
 
-    char filename_prefix[] = "/usr/share/dipp/data/batch_%s.bin";
-    char batch_filename[sizeof(filename_prefix) + 37];
-    snprintf(batch_filename, sizeof(filename_prefix) + 37, filename_prefix, file_uuid);
+    char filename_prefix[] = "/usr/share/dipp/data/batch_%s_%s.bin";
+    char batch_filename[sizeof(filename_prefix) + 37 + 37];
+    snprintf(batch_filename, sizeof(filename_prefix) + 37 + 37, filename_prefix, batch_uuid, file_uuid);
 
     int fd = open(batch_filename, O_RDWR | O_CREAT, 0644);
     if (fd < 0)
