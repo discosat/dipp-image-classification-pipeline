@@ -54,6 +54,8 @@ void finalize()
     // change the filename of the result batch
     strcpy(result->filename, batch_filename);
 
+    result->progress = input->progress + 1;
+
     // delete the old batch file
     if (remove(input->filename) != 0)
     {
