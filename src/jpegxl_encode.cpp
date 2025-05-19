@@ -41,7 +41,7 @@ void module()
         Metadata *input_meta = get_metadata(i);
         int height = input_meta->height;
         int width = input_meta->width;
-        int channels = input_meta->channels;
+        uint32_t channels = input_meta->channels;
         int timestamp = input_meta->timestamp;
         int bits_pixel = input_meta->bits_pixel;
         char *camera = input_meta->camera;

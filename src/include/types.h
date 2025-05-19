@@ -5,12 +5,14 @@
 
 typedef struct ImageBatch
 {
-    long mtype;
-    int num_images;
-    int batch_size;
-    int shmid;
-    int pipeline_id;
-    unsigned char *data;
+    long mtype;          /* message type to read from the message queue */
+    int num_images;      /* amount of images */
+    int batch_size;      /* size of the image batch */
+    int pipeline_id;     /* id of pipeline to utilize for processing */
+    int priority;        /* priority of the image batch, e.g. max_latency from SLOs */
+    unsigned char *data; /* address to image data (in shared memory) */
+    char filename[70];   /* filename of the image data */
+    int progress;        /* index of the last processed module (-1 if not started) */
 } ImageBatch;
 
 typedef enum ModuleParameter__ValueCase
@@ -26,7 +28,8 @@ typedef struct ModuleParameter
 {
     char *key;
     ModuleParameter__ValueCase value_case;
-    union {
+    union
+    {
         int bool_value;
         int int_value;
         float float_value;

@@ -1,5 +1,7 @@
 #include "util.h"
-#include <sys/shm.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
 
 ImageBatch *input;
 ImageBatch *result;
@@ -65,14 +67,22 @@ void append_result_image(unsigned char *data, uint32_t data_size, Metadata *meta
     result->num_images += 1;
 }
 
-static void attach()
+static void get_batch_data()
 {
-    void *shmaddr = shmat(input->shmid, NULL, 0);
-    if (shmaddr == NULL)
+    int fd = open(input->filename, O_RDONLY, 0644);
+    if (fd == -1)
     {
         signal_error_and_exit(303);
     }
-    input->data = shmaddr;
+
+    input->data = mmap(NULL, input->batch_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (input->data == MAP_FAILED)
+    {
+        close(fd);
+        signal_error_and_exit(305);
+    }
+
+    close(fd);
 }
 
 void initialize()
@@ -80,6 +90,7 @@ void initialize()
     result->batch_size = 0;
     result->num_images = 0;
     result->pipeline_id = input->pipeline_id;
-    if (SHARED_MEMORY) attach();
+    result->priority = input->priority;
+    get_batch_data();
     unpack_metadata();
 }

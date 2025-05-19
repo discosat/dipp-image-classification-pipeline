@@ -7,6 +7,7 @@ cflags = ['-Wall']
 proto_c_dep = meson.get_compiler('c').find_library('protobuf-c', required: false)
 rt_dep = meson.get_compiler('c').find_library('rt', required: false)
 jxl_dep = meson.get_compiler('cpp').find_library('libjxl', required: true)
+uuid_dep = meson.get_compiler('c').find_library('uuid', required: false)
 tflite_dep = dependency('tensorflow2-lite')
 opencv_dep = dependency('opencv4')
 
@@ -31,16 +32,16 @@ shared_library(
     'tflite_tiled_classification',
     ['src/tflite_module.cpp'] + sources,
     include_directories: dirs,
-    c_args: cflags + ['-DSHARED_MEMORY=1'],
-    dependencies: [rt_dep, proto_c_dep, tflite_dep],
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
 )
 # Shared library (SO)
 shared_library(
     'jpegxl_encode',
     ['src/jpegxl_encode.cpp'] + sources,
     include_directories: dirs,
-    c_args: cflags + ['-DSHARED_MEMORY=1'],
-    dependencies: [rt_dep, proto_c_dep, jxl_dep],
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, jxl_dep, uuid_dep],
 )
 
 # Shared library (SO)
@@ -48,8 +49,8 @@ shared_library(
     'demosaic',
     ['src/demosaic.cpp'] + sources,
     include_directories: dirs,
-    c_args: cflags + ['-DSHARED_MEMORY=1'],
-    dependencies: [rt_dep, proto_c_dep, opencv_dep],
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
 )
 
 # Shared library (SO)
@@ -57,8 +58,8 @@ shared_library(
     'single_module',
     ['src/single_module.cpp'] + sources,
     include_directories: dirs,
-    c_args: cflags + ['-DSHARED_MEMORY=1'],
-    dependencies: [rt_dep, proto_c_dep, opencv_dep, tflite_dep, jxl_dep],
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, opencv_dep, tflite_dep, jxl_dep, uuid_dep],
 )
 
 # Shared library (SO)
@@ -66,8 +67,8 @@ shared_library(
     'crash_and_burn',
     ['src/crash_and_burn.c'] + sources,
     include_directories: dirs,
-    c_args: cflags + ['-DSHARED_MEMORY=1'],
-    dependencies: [rt_dep, proto_c_dep],
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, uuid_dep],
 )
 
 # Check for cross-compiling
@@ -84,8 +85,8 @@ if not get_option('cross-compile')
         meson.project_name() + '-exec',
         sources,
         include_directories: dirs,
-        c_args: cflags + ['-g', '-DSHARED_MEMORY=0'],
-        dependencies: [libyaml_dep, m_dep, proto_c_dep],
+        c_args: cflags + ['-g'],
+        dependencies: [libyaml_dep, m_dep, proto_c_dep, uuid_dep],
     )
 endif
 
@@ -104,6 +105,6 @@ executable(
     'emulate_camera',
     sources_emulate,
     include_directories: dirs,
-    c_args: cflags + ['-DSHARED_MEMORY=1'],
-    dependencies: [proto_c_dep],
+    c_args: cflags,
+    dependencies: [proto_c_dep, uuid_dep],
 )
