@@ -13,13 +13,13 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 5)
+    if (argc < 4)
     {
-        printf("Missing arguments: Expected <num_images> <pipeline_id> <max_timestamp> <image_name>");
+        printf("Missing arguments: Expected <num_images> <pipeline_id> <image_name>");
         return -1;
     }
 
-    char *image_name = argv[4];
+    char *image_name = argv[3];
 
     // Get timestamp (used for SHM key)
     struct timespec time;
@@ -44,7 +44,14 @@ int main(int argc, char *argv[])
     data.mtype = 1;
     data.num_images = atoi(argv[1]);
     data.pipeline_id = atoi(argv[2]);
-    data.priority = atoi(argv[3]); // max_timestamp (in seconds)
+    // generate a random latency between 0 and 100 seconds
+    int latency = rand() % 100;
+    // get current time in seconds
+    time_t current_time = time.tv_sec;
+    // add latency to current time
+    time_t max_timestamp = current_time + latency;
+    // convert to seconds
+    data.priority = max_timestamp; // max_timestamp (in seconds)
     data.progress = -1;            // default progress
 
     char batch_uuid[37];
