@@ -21,14 +21,6 @@ int main(int argc, char *argv[])
 
     char *image_name = argv[3];
 
-    // Get timestamp (used for SHM key)
-    struct timespec time;
-    if (clock_gettime(CLOCK_MONOTONIC, &time) < 0)
-    {
-        perror("clock_gettime");
-        exit(EXIT_FAILURE);
-    }
-
     printf("Got time\r\n");
 
     FILE *fh = fopen(image_name, "r");
@@ -44,15 +36,19 @@ int main(int argc, char *argv[])
     data.mtype = 1;
     data.num_images = atoi(argv[1]);
     data.pipeline_id = atoi(argv[2]);
+
     // generate a random latency between 0 and 100 seconds
     int latency = rand() % 100;
     // get current time in seconds
-    time_t current_time = time.tv_sec;
+    struct timespec time;
+    if (clock_gettime(CLOCK_MONOTONIC, &time) < 0)
+    {
+        perror("clock_gettime");
+        exit(EXIT_FAILURE);
+    }
     // add latency to current time
-    time_t max_timestamp = current_time + latency;
-    // convert to seconds
-    data.priority = max_timestamp; // max_timestamp (in seconds)
-    data.progress = -1;            // default progress
+    data.priority = time.tv_sec + latency; // max_timestamp (in seconds)
+    data.progress = -1;                    // default progress
 
     char batch_uuid[37];
     uuid_t uuid;
