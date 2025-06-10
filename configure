@@ -1,37 +1,99 @@
 #!/bin/sh
 
-# Check if the number of arguments is exactly 1
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 [build|test]"
+# Parse command line arguments
+use_cross_compile="false"
+build_mode=""
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [build|test] [--cross]"
+    echo ""
+    echo "Arguments:"
+    echo "  build         Build shared object files only (for deployment)"
+    echo "  test          Build with test executable (for development/testing)"
+    echo ""
+    echo "Options:"
+    echo "  --cross       Cross-compile for AArch64 target platform"
+    echo "                (requires sourcing /opt/poky/environment-setup-armv8a-poky-linux)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 build               # Native build, shared libs only"
+    echo "  $0 build --cross       # Cross-compile shared libs for AArch64"
+    echo "  $0 test                # Native build with test executable"
+    echo "  $0 test --cross        # Cross-compile test executable for AArch64"
+}
+
+# Check for minimum number of arguments
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+    show_usage
     exit 1
 fi
 
-# Define the default value for cross-compile option
-cross_compile_value="false"
+# Parse first argument (build mode)
+case "$1" in
+    "build")
+        build_mode="build"
+        echo "Mode: Building shared object files for deployment..."
+        ;;
+    "test")
+        build_mode="test"
+        echo "Mode: Building with test executable for development/testing..."
+        ;;
+    *)
+        echo "Error: Invalid build mode '$1'"
+        show_usage
+        exit 1
+        ;;
+esac
 
-# Check if the argument is 'build' or 'test'
-if [ "$1" = "build" ]; then
-    echo "Building shared object files..."
-    cross_compile_value="true"
-elif [ "$1" = "test" ]; then
-    echo "Building test files..."
+# Parse second argument (cross-compile flag)
+if [ $# -eq 2 ]; then
+    case "$2" in
+        "--cross")
+            use_cross_compile="true"
+            echo "Cross-compilation: Enabled for AArch64 target"
+            ;;
+        *)
+            echo "Error: Invalid option '$2'"
+            show_usage
+            exit 1
+            ;;
+    esac
 else
-    echo "Invalid argument. Expected 'build' or 'test'."
-    exit 1
+    echo "Cross-compilation: Disabled (building for host architecture)"
 fi
 
-# Write the option to meson_options.txt
-echo "option('cross-compile', type : 'boolean', value : $cross_compile_value, description : 'Determine whether to cross-compile to AArch64')" > meson_options.txt
+# Determine meson cross-compile option based on build mode
+# Note: The meson 'cross-compile' option controls whether test executable is built
+# - true: Only shared libraries (no test executable)
+# - false: Include test executable
+if [ "$build_mode" = "build" ]; then
+    meson_cross_compile="true"   # Shared libs only
+else
+    meson_cross_compile="false"  # Include test executable
+fi
+
+# Write the meson option configuration
+echo "option('cross-compile', type : 'boolean', value : $meson_cross_compile, description : 'Determine whether to build test executable')" > meson_options.txt
 
 # Clean and setup the build directory
+echo "Cleaning previous build..."
 rm -rf builddir
-if $cross_compile_value = "true"; then
+
+# Configure meson based on target architecture
+if [ "$use_cross_compile" = "true" ]; then
+    echo "Setting up cross-compilation build environment..."
+    # Use cross-compilation toolchain for AArch64
     meson setup builddir --cross-file yocto_cross.ini
 else 
+    echo "Setting up native build environment..."
+    # Use host architecture toolchain
     meson setup . builddir
 fi
 
-# Navigate to the build directory and build the project
+# Build the project
+echo "Building project..."
 ninja -j 4 -C builddir 
 
+echo "Build completed successfully!"
 exit 0

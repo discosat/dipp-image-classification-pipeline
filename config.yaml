@@ -1,0 +1,21 @@
+
+# Configuration file for e2e pipeline test module
+#
+# This file contains module parameters for the test executable (e2e_pipeline-exec).
+# The test is currently configured to use the demosaic module (see meson.build line 86).
+#
+# Module parameter format:
+# Each module parameter should be defined as:
+# - name: "parameter_name"
+#   value: "parameter_value"
+#
+# The demosaic module does not require any parameters, so an empty array is correct.
+# For other modules, add parameters as needed. Examples:
+#
+# For tflite module, use tflite_config.yaml instead with:
+# - name: "model_path" 
+#   value: "path/to/model.tflite"
+#
+# For other modules, refer to their source code for required parameters.
+
+[]
