@@ -1,7 +1,10 @@
 #include "util.h"
+#include "types.h"
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/mman.h>
+#include <sys/shm.h>
 
 ImageBatch *input;
 ImageBatch *result;
@@ -67,31 +70,107 @@ void append_result_image(unsigned char *data, uint32_t data_size, Metadata *meta
     result->num_images += 1;
 }
 
-static void get_batch_data()
-{
-    int fd = open(input->filename, O_RDONLY, 0644);
-    if (fd == -1)
-    {
-        signal_error_and_exit(303);
-    }
-
-    input->data = mmap(NULL, input->batch_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (input->data == MAP_FAILED)
-    {
-        close(fd);
-        signal_error_and_exit(305);
-    }
-
-    close(fd);
-}
-
 void initialize()
 {
     result->batch_size = 0;
     result->num_images = 0;
     result->pipeline_id = input->pipeline_id;
     result->priority = input->priority;
+    result->mtype = input->mtype;
+    result->storage_mode = input->storage_mode;
     strcpy(result->uuid, input->uuid);
-    get_batch_data();
+    image_batch_read_data(input);
     unpack_metadata();
+}
+
+int image_batch_read_data(ImageBatch *batch)
+{
+    if (!batch)
+    {
+        return FAILURE;
+    }
+
+    switch (batch->storage_mode)
+    {
+    case STORAGE_MMAP:
+    {
+        // Memory-mapped file access
+        int fd = open(batch->filename, O_RDONLY, 0644);
+        if (fd == -1)
+        {
+            signal_error_and_exit(303);
+            return FAILURE;
+        }
+
+        batch->data = mmap(NULL, batch->batch_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        close(fd);
+
+        if (batch->data == MAP_FAILED)
+        {
+            signal_error_and_exit(302);
+            return FAILURE;
+        }
+
+        break;
+    }
+    case STORAGE_MEM:
+    {
+        // Shared memory access
+        batch->data = shmat(batch->shmid, NULL, 0);
+        if (batch->data == (void *)-1)
+        {
+            signal_error_and_exit(308);
+            return FAILURE;
+        }
+
+        break;
+    }
+    case STORAGE_NOT_SET:
+    default:
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int image_batch_cleanup(ImageBatch *batch)
+{
+    if (!batch)
+    {
+        return FAILURE;
+    }
+
+    int result = SUCCESS;
+
+    switch (batch->storage_mode)
+    {
+    case STORAGE_MMAP:
+    {
+        // Unmap memory-mapped file
+        if (batch->data && munmap(batch->data, batch->batch_size) == -1)
+        {
+            signal_error_and_exit(301);
+            result = FAILURE;
+        }
+        break;
+    }
+    case STORAGE_MEM:
+    {
+        // Detach from shared memory
+        if (batch->data && shmdt(batch->data) == -1)
+        {
+            signal_error_and_exit(306);
+            result = FAILURE;
+        }
+        break;
+    }
+    case STORAGE_NOT_SET:
+    default:
+        break;
+    }
+
+    // Clear the data pointer
+    batch->data = NULL;
+
+    return result;
 }

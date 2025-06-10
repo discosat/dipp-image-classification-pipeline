@@ -1,6 +1,11 @@
 #include "module.h"
 #include "util.h"
 #include "logger.h"
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
 
 typedef enum FAIL_CASE
 {
@@ -19,14 +24,15 @@ typedef enum FAIL_CASE
 } FAIL_CASE;
 
 typedef void (*FuncPtr)();
-void recursion() { 
-    recursion(); 
+void recursion()
+{
+    recursion();
 }
 
 /* START MODULE IMPLEMENTATION */
 void module()
 {
-    const char* dir = "/home/root/logs/";
+    const char *dir = "/home/root/logs/";
     char file_name[256];
     time_t t = time(NULL);
     snprintf(file_name, sizeof(file_name), "crash_%ld.txt", t);
@@ -54,12 +60,12 @@ void module()
         break;
     case ACCESS_PROTECTED_MEMORY:
         printf("Accessing protected memory...\n");
-        char *char_ptr = (char*)0x0;
+        char *char_ptr = (char *)0x0;
         *char_ptr = 'a';
         break;
     case WRITING_READ_ONLY_MEMORY:
         printf("Writing to read-only memory...\n");
-        char *str = "Hello";    
+        char *str = "Hello";
         str[0] = 'h';
         break;
     case STACK_OVERFLOW:
@@ -109,15 +115,15 @@ void module()
         new_meta.bits_pixel = input_meta->bits_pixel;
         new_meta.camera = input_meta->camera;
 
-        unsigned char * image_data;
+        unsigned char *image_data;
         uint32_t image_size = get_image_data(0, &image_data);
         printf("Increased image batch to size: %d...\n", input->batch_size + image_size);
         for (int i = 0; i < get_input_num_images() + 1; i++)
         {
             append_result_image(image_data, image_size, &new_meta);
         }
-        free(image_data);   
-        break;     
+        free(image_data);
+        break;
     default:
         printf("'fail_case' not recognized\n");
         break;
@@ -138,7 +144,7 @@ ImageBatch run(ImageBatch *input_batch, ModuleParameterList *module_parameter_li
     config = module_parameter_list;
     error_pipe = ipc_error_pipe;
     initialize();
-    
+
     module();
 
     finalize();

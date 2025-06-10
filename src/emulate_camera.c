@@ -3,12 +3,10 @@
 #include <stdio.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <sys/shm.h>
 #include <string.h>
 #include <time.h>
 #include "metadata.pb-c.h"
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
 #include <uuid/uuid.h>
 
 int main(int argc, char *argv[])
@@ -20,8 +18,6 @@ int main(int argc, char *argv[])
     }
 
     char *image_name = argv[3];
-
-    printf("Got time\r\n");
 
     FILE *fh = fopen(image_name, "r");
     // get size of the file in bytes
@@ -49,6 +45,8 @@ int main(int argc, char *argv[])
     // add latency to current time
     data.priority = time.tv_sec + latency; // max_timestamp (in seconds)
     data.progress = -1;                    // default progress
+    data.filename[0] = '\0';               // no filename needed
+    data.data = NULL;                      // no data needed
 
     char batch_uuid[37];
     uuid_t uuid;
@@ -83,60 +81,32 @@ int main(int argc, char *argv[])
 
     uint32_t batch_size = (image_size + sizeof(uint32_t) + meta_size) * data.num_images;
 
-    char file_uuid[37];
-    uuid_generate_random(uuid);
-    uuid_unparse_lower(uuid, file_uuid);
-
-    char filename_prefix[] = "/usr/share/dipp/data/batch_%s_%s.bin";
-    char batch_filename[sizeof(filename_prefix) + 37 + 37];
-    snprintf(batch_filename, sizeof(filename_prefix) + 37 + 37, filename_prefix, batch_uuid, file_uuid);
-
-    int fd = open(batch_filename, O_RDWR | O_CREAT, 0644);
-    if (fd < 0)
-    {
-        printf("Error opening batch file: %s\n", batch_filename);
-        return -1;
-    }
-
-    // Ensure file is large enough
-    if (ftruncate(fd, batch_size) == -1)
-    {
-        printf("Error resizing batch file: %s\n", batch_filename);
-        close(fd);
-        return -1;
-    }
-
-    // Memory map the file
-    char *persisted_batch = mmap(NULL, batch_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (persisted_batch == MAP_FAILED)
-    {
-        printf("Error mapping batch file: %s\n", batch_filename);
-        close(fd);
-        return -1;
-    }
-
-    size_t offset = 0;
+    int shmid = shmget(time.tv_nsec, batch_size, IPC_CREAT | 0666);
+    data.shmid = shmid;
+    char *shmaddr = shmat(shmid, NULL, 0);
     data.batch_size = batch_size;
-    strcpy(data.filename, batch_filename);
+    size_t offset = 0;
 
     for (size_t i = 0; i < data.num_images; i++)
     {
         // Insert metadata size before metadata
-        memcpy(persisted_batch + offset, &meta_size, sizeof(uint32_t));
+        memcpy(shmaddr + offset, &meta_size, sizeof(uint32_t));
         offset += sizeof(uint32_t);
         printf("Copied size of meta\r\n");
-        memcpy(persisted_batch + offset, &meta_buf, meta_size);
+        memcpy(shmaddr + offset, &meta_buf, meta_size);
         offset += meta_size;
         printf("Copied meta\r\n");
         // insert image
         fseek(fh, 0, SEEK_SET);
-        fread(persisted_batch + offset, 1, image_size, fh);
+        if (fread(shmaddr + offset, 1, image_size, fh) < 0)
+        {
+            perror("Error reading image");
+            shmdt(shmaddr);
+            return -1;
+        }
         offset += image_size;
         printf("Copied image\r\n");
     }
-
-    close(fd);
-    munmap(persisted_batch, batch_size);
 
     // create msg queue
     int msg_queue_id;
@@ -154,4 +124,7 @@ int main(int argc, char *argv[])
     }
 
     printf("Image sent!\n");
+
+    shmdt(shmaddr);
+    fclose(fh);
 }
