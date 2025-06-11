@@ -22,7 +22,7 @@ The configure script will:
 - Set up meson with correct toolchain (native or cross-compile)
 - Run ninja to compile
 
-**Test the demosaic module from standalone buffer_dump.bin:**
+**Test the demosaic as standalone buffer_dump.bin:**
 ```bash
 ./run.sh
 ```

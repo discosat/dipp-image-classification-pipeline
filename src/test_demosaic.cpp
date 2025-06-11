@@ -91,21 +91,14 @@ int main(int argc, char *argv[]) {
 
     if (!has_metadata) {
         printf("No metadata file found, using fallback detection\n");
+        // Use full resolution 
         image_width = 2464;
+        image_height = 2056;
         bits_per_pixel = 12;
         image_channels = 1;
         strcpy(bayer_pattern, "GRBG");
         
-        size_t actual_data_bytes = 4794484;
-        size_t bytes_per_pixel = 2;
-        
-        if (fsize > actual_data_bytes) {
-            image_height = actual_data_bytes / (image_width * bytes_per_pixel);
-            printf("Detected zero-padding in buffer, using actual image height: %d\n", image_height);
-        } else {
-            image_height = fsize / (image_width * bytes_per_pixel);
-            printf("No padding detected, calculated height: %d\n", image_height);
-        }
+        printf("Using full camera resolution: %dx%d\n", image_width, image_height);
     } else {
         printf("Using metadata: %dx%d, %d bpp, %d channels, Bayer: %s\n", 
                image_width, image_height, bits_per_pixel, image_channels, bayer_pattern);
@@ -135,7 +128,16 @@ int main(int argc, char *argv[]) {
     if (bits_per_pixel <= 8) {
         rawImage = cv::Mat(image_height, image_width, CV_8UC1, image_data);
     } else {
+        // For 12-bit data, create as 16-bit and mask to 12-bit values
         rawImage = cv::Mat(image_height, image_width, CV_16UC1, image_data);
+        if (bits_per_pixel == 12) {
+            // Mask to 12-bit values (& 0x0FFF)
+            uint16_t* ptr = (uint16_t*)rawImage.data;
+            size_t total_pixels = image_width * image_height;
+            for (size_t i = 0; i < total_pixels; i++) {
+                ptr[i] = ptr[i] & 0x0FFF;
+            }
+        }
     }
     
     printf("Raw image stats - Min/Max values before demosaic:\n");
@@ -148,36 +150,50 @@ int main(int argc, char *argv[]) {
 
     free(image_data);
 
+    // Convert to 8-bit for demosaicing (scale from 12-bit to 8-bit using bit shift)
+    cv::Mat rawImage8bit;
+    if (bits_per_pixel <= 8) {
+        rawImageContiguous.copyTo(rawImage8bit);
+    } else if (bits_per_pixel == 12) {
+        // Use bit shift (>>4) to convert 12-bit to 8-bit, matching Python implementation
+        rawImage8bit = cv::Mat(image_height, image_width, CV_8UC1);
+        uint16_t* src = (uint16_t*)rawImageContiguous.data;
+        uint8_t* dst = (uint8_t*)rawImage8bit.data;
+        size_t total_pixels = image_width * image_height;
+        for (size_t i = 0; i < total_pixels; i++) {
+            dst[i] = (uint8_t)(src[i] >> 4);
+        }
+    } else {
+        // For other bit depths, use normalization
+        cv::normalize(rawImageContiguous, rawImage8bit, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+    }
+    
+    // Apply vertical flip to match camera orientation (cameras often capture upside down)
+    cv::Mat flippedImage;
+    cv::flip(rawImage8bit, flippedImage, 0);  // 0 means vertical flip
+    
     cv::Mat demosaicedImage;
 
     int cv_color_code;
+    // Note: Using BGR output to match Python implementation
     if (strcmp(bayer_pattern, "RGGB") == 0) {
-        cv_color_code = cv::COLOR_BayerBG2RGB;
+        cv_color_code = cv::COLOR_BayerRG2BGR;
     } else if (strcmp(bayer_pattern, "GRBG") == 0) {
-        cv_color_code = cv::COLOR_BayerGR2RGB;
+        cv_color_code = cv::COLOR_BayerGR2BGR;
     } else if (strcmp(bayer_pattern, "GBRG") == 0) {
-        cv_color_code = cv::COLOR_BayerGB2RGB;
+        cv_color_code = cv::COLOR_BayerGB2BGR;
     } else if (strcmp(bayer_pattern, "BGGR") == 0) {
-        cv_color_code = cv::COLOR_BayerRG2RGB;
+        cv_color_code = cv::COLOR_BayerBG2BGR;
     } else {
         printf("Warning: Unknown Bayer pattern '%s', defaulting to GRBG\n", bayer_pattern);
-        cv_color_code = cv::COLOR_BayerGR2RGB;
+        cv_color_code = cv::COLOR_BayerGR2BGR;
     }
 
-    printf("Performing demosaicing (Bayer pattern: %s)...\n", bayer_pattern);
-    cv::cvtColor(rawImageContiguous, demosaicedImage, cv_color_code);
+    printf("Performing demosaicing (Bayer pattern: %s) with vertical flip...\n", bayer_pattern);
+    cv::cvtColor(flippedImage, demosaicedImage, cv_color_code);
 
-    printf("Normalizing to 8-bit...\n");
-    cv::Mat demosaicedImage_8bit;
-    if (bits_per_pixel <= 8) {
-        demosaicedImage.copyTo(demosaicedImage_8bit);
-    } else {
-        cv::normalize(demosaicedImage, demosaicedImage_8bit, 0, 255, cv::NORM_MINMAX, CV_8UC3);
-        
-        double minVal, maxVal;
-        cv::minMaxLoc(demosaicedImage, &minVal, &maxVal);
-        printf("Demosaiced image range: %.0f - %.0f, normalized to 0-255\n", minVal, maxVal);
-    }
+    // Demosaicing output is already 8-bit BGR, no normalization needed
+    cv::Mat demosaicedImage_8bit = demosaicedImage;
 
     std::filesystem::path input_path(input_file);
     std::string base_name = input_path.stem().string();
@@ -190,7 +206,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Demosaic test completed successfully!\n");
-    printf("Input: %dx%d (%d-bit %s), Output: %dx%d (8-bit RGB), channels: %d\n", 
+    printf("Input: %dx%d (%d-bit %s), Output: %dx%d (8-bit BGR), channels: %d\n", 
            image_width, image_height, bits_per_pixel, bayer_pattern,
            demosaicedImage_8bit.cols, demosaicedImage_8bit.rows, demosaicedImage_8bit.channels());
 
