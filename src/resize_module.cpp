@@ -34,9 +34,7 @@ void module()
         int height = input_meta->height;
         int width = input_meta->width;
         int channels = input_meta->channels;
-        int timestamp = input_meta->timestamp;
         int bits_pixel = input_meta->bits_pixel;
-        char *camera = input_meta->camera;
 
         if (height <= 0 || width <= 0 || channels <= 0)
         {
@@ -114,10 +112,7 @@ void module()
         new_meta.channels = channels;
         new_meta.bits_pixel = input_meta->bits_pixel;
         new_meta.timestamp = input_meta->timestamp;
-        new_meta.camera = input_meta->camera;
-
-        /* Add custom metadata for demosaicing info */
-        add_custom_metadata_int(&new_meta, "resized", target_size);
+        strcpy(new_meta.camera, input_meta->camera);
 
         /* Append the processed image to the result batch */
         append_result_image(output_image_data, output_size, &new_meta);
