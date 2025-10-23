@@ -37,7 +37,6 @@ void module()
         int timestamp = input_meta->timestamp;
         int bits_pixel = input_meta->bits_pixel;
         char *camera = input_meta->camera;
-        int obid = input_meta->obid;
 
         if (height <= 0 || width <= 0 || channels <= 0)
         {
@@ -115,7 +114,6 @@ void module()
         new_meta.channels = channels;
         new_meta.bits_pixel = input_meta->bits_pixel;
         new_meta.timestamp = input_meta->timestamp;
-        new_meta.obid = input_meta->obid;
         new_meta.camera = input_meta->camera;
 
         /* Add custom metadata for demosaicing info */
