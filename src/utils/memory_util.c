@@ -83,7 +83,6 @@ void finalize()
         if (result->batch_size > shm_size)
         {
             // Resize is needed: Utilize new unique shared memory ID for storing the batch
-
             int new_shmid = -1;
             struct timespec time;
             // Continously try keys for new shared memory segments

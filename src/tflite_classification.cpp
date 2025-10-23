@@ -39,6 +39,11 @@ void module()
     char *model_filename = get_param_string("model_filename");
     logger_log(logger, LOG_INFO, "got model filename.");
 
+    /* Retrieve the class idx of interest */
+    logger_log(logger, LOG_INFO, "getting class index.");
+    int class_idx = get_param_int("class_index");
+    logger_log(logger, LOG_INFO, "got class index.");
+
     // Load the model
     logger_log(logger, LOG_INFO, "Building model from file.");
     std::unique_ptr<tflite::FlatBufferModel> model =
@@ -111,7 +116,6 @@ void module()
     auto output_size = output_dims->data[output_dims->size - 1];
     logger_log(logger, LOG_INFO, "Got output dimensions.");
 
-    /* Example code for iterating a pixel value at a time */
     for (int i = 0; i < num_images; ++i)
     {
         logger_log(logger, LOG_INFO, "Full image started");
@@ -195,8 +199,8 @@ void module()
                 }
                 logger_log(logger, LOG_INFO, "Got top class.");
 
-                // send only 20% of the patches
-                if (tile_idx % 5 == 0)
+                // send only the patches that match the class idx of interest
+                if (max_cls == class_idx)
                 {
                     /* Create image metadata before appending */
                     Metadata new_meta = METADATA__INIT;
@@ -208,10 +212,10 @@ void module()
                     new_meta.bits_pixel = bits_pixel;
                     new_meta.camera = camera;
 
-                    /* Add custom metadata key-value for prediction */
-                    logger_log(logger, LOG_INFO, "Adding custom metadata.");
-                    add_custom_metadata_int(&new_meta, "prediction", max_cls);
-                    logger_log(logger, LOG_INFO, "Added custom metadata.");
+                    // /* Add custom metadata key-value for prediction */
+                    // logger_log(logger, LOG_INFO, "Adding custom metadata.");
+                    // add_custom_metadata_int(&new_meta, "prediction", max_cls);
+                    // logger_log(logger, LOG_INFO, "Added custom metadata.");
 
                     /* Append the image to the result batch */
                     logger_log(logger, LOG_INFO, "Appending image to result batch.");

@@ -30,11 +30,21 @@ dirs = include_directories(
 # Shared library (SO)
 shared_library(
     'tflite_tiled_classification',
-    ['src/tflite_module.cpp'] + sources,
+    ['src/tflite_classification.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
     dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
 )
+
+# Shared library (SO)
+shared_library(
+    'tflite_binary_segmentation',
+    ['src/tflite_binary_segmentation.cpp'] + sources,
+    include_directories: dirs,
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
+)
+
 # Shared library (SO)
 shared_library(
     'jpegxl_encode',
@@ -48,6 +58,15 @@ shared_library(
 shared_library(
     'demosaic',
     ['src/demosaic.cpp'] + sources,
+    include_directories: dirs,
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
+)
+
+# Shared library (SO)
+shared_library(
+    'resize',
+    ['src/resize_module.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
     dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
