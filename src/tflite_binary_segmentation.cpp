@@ -109,14 +109,6 @@ void module()
     const float zero_point = output_tensor->params.zero_point;
     logger_log(logger, LOG_INFO, "Got quantization parameters.");
 
-    // Get output dimensions
-    logger_log(logger, LOG_INFO, "Getting output dimensions.");
-    int output = interpreter->outputs()[0];
-    // TfLiteIntArray *output_dims = interpreter->tensor(output)->dims;
-    // // assume output dims to be something like (1, 1, ... ,size)
-    // auto output_size = output_dims->data[output_dims->size - 1];
-    logger_log(logger, LOG_INFO, "Got output dimensions.");
-
     for (int i = 0; i < num_images; ++i)
     {
         logger_log(logger, LOG_INFO, "Full image started");
@@ -187,8 +179,6 @@ void module()
                 // Get top class
                 logger_log(logger, LOG_INFO, "Getting top class.");
                 uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
-                float max_val = -1.0;
-                int max_cls = -1;
                 for (int i = 0; i < tile_size * tile_size; i++)
                 {
                     float scaled_score = static_cast<float>(scores[i] - zero_point) * scale;
