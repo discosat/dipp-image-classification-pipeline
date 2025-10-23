@@ -177,7 +177,7 @@ void module()
                 logger_log(logger, LOG_INFO, "Invoked");
 
                 // Get top class
-                logger_log(logger, LOG_INFO, "Getting top class.");
+                logger_log(logger, LOG_INFO, "Applying the segmentation mask.");
                 uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
                 for (int i = 0; i < tile_size * tile_size; i++)
                 {
@@ -207,26 +207,23 @@ void module()
                         output_image_data[i * channels + 2] = 0;
                     }
                 }
-                logger_log(logger, LOG_INFO, "Got top class.");
+                logger_log(logger, LOG_INFO, "Applied the segmentation mask.");
 
-                // send only the patches that match the class idx of interest
-                if (max_cls == class_idx)
-                {
-                    /* Create image metadata before appending */
-                    Metadata new_meta = METADATA__INIT;
-                    new_meta.size = tile_bytes;
-                    new_meta.width = tile_size;
-                    new_meta.height = tile_size;
-                    new_meta.channels = channels;
-                    new_meta.timestamp = timestamp;
-                    new_meta.bits_pixel = bits_pixel;
-                    new_meta.camera = camera;
+                /* Create image metadata before appending */
+                Metadata new_meta = METADATA__INIT;
+                new_meta.size = tile_bytes;
+                new_meta.width = tile_size;
+                new_meta.height = tile_size;
+                new_meta.channels = channels;
+                new_meta.timestamp = timestamp;
+                new_meta.bits_pixel = bits_pixel;
+                new_meta.camera = camera;
 
-                    /* Append the image to the result batch */
-                    logger_log(logger, LOG_INFO, "Appending image to result batch.");
-                    append_result_image(output_image_data, tile_bytes, &new_meta);
-                    logger_log(logger, LOG_INFO, "Appended image to result batch.");
-                }
+                /* Append the image to the result batch */
+                logger_log(logger, LOG_INFO, "Appending image to result batch.");
+                append_result_image(output_image_data, tile_bytes, &new_meta);
+                logger_log(logger, LOG_INFO, "Appended image to result batch.");
+
                 tile_idx++;
             }
         }
