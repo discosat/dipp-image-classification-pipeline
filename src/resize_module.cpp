@@ -48,9 +48,7 @@ void module()
         size_t size = get_image_data(i, &input_image_data);
 
         // Retrieve target size
-        logger_log(logger, LOG_INFO, "getting target size.");
         int target_size = get_param_int("target_size");
-        logger_log(logger, LOG_INFO, "got target size.");
 
         // Calculate scale to fit within target_size while preserving aspect ratio
         double scale = std::min(static_cast<double>(target_size) / width,
