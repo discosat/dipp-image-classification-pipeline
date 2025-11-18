@@ -71,7 +71,6 @@ void finalize()
 
     case STORAGE_MEM:
         // Handle shared memory finalization
-
         struct shmid_ds info;
         if (shmctl(input->shmid, IPC_STAT, &info) == -1)
         {

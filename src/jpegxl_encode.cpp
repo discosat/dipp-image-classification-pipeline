@@ -91,6 +91,14 @@ void module()
         JxlEncoderFrameSettings *frame_settings = JxlEncoderFrameSettingsCreate(encoder.get(), nullptr);
         logger_log(logger, LOG_INFO, "Created frame settings.");
 
+        logger_log(logger, LOG_INFO, "Setting frame options.");
+        int effort_level = get_param_int("effort_level");
+        if (effort_level < 1 || effort_level > 10)
+        {
+            effort_level = 7; // default effort level as a fallback
+        }
+        JxlEncoderFrameSettingsSetOption(frame_settings, JXL_ENC_FRAME_SETTING_EFFORT, effort_level);
+
         // Set the image buffer.
         logger_log(logger, LOG_INFO, "Adding image frame.");
         if (JxlEncoderAddImageFrame(frame_settings, &pixel_format, image_buffer, size) != JXL_ENC_SUCCESS)
@@ -142,13 +150,12 @@ void module()
 
         /* Create image metadata before appending */
         Metadata new_meta = METADATA__INIT;
+        if (clone_metadata(input_meta, &new_meta) != 0)
+        {
+            signal_error_and_exit(MALLOC_ERR);
+        }
+
         new_meta.size = compressed_data.size() * sizeof(uint8_t);
-        new_meta.width = width;
-        new_meta.height = height;
-        new_meta.channels = channels;
-        new_meta.timestamp = timestamp;
-        new_meta.bits_pixel = bits_pixel;
-        new_meta.camera = camera;
 
         /* Append the image to the result batch */
         logger_log(logger, LOG_INFO, "Appending image to result batch.");

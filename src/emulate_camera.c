@@ -8,17 +8,17 @@
 #include <time.h>
 #include "metadata.pb-c.h"
 #include <uuid/uuid.h>
+#include <stdlib.h>
 
 int main(int argc, char *argv[])
 {
-    if (argc < 4)
+    if (argc < 5)
     {
-        printf("Missing arguments: Expected <num_images> <pipeline_id> <image_name>");
+        printf("Missing arguments: Expected <num_images> <pipeline_id> <observation_id> <image_name>");
         return -1;
     }
 
-    char *image_name = argv[3];
-
+    char *image_name = argv[4];
     FILE *fh = fopen(image_name, "r");
     // get size of the file in bytes
     fseek(fh, 0, SEEK_END);
@@ -47,6 +47,7 @@ int main(int argc, char *argv[])
     data.progress = -1;                    // default progress
     data.filename[0] = '\0';               // no filename needed
     data.data = NULL;                      // no data needed
+    data.storage_mode = STORAGE_MEM;       // use shared memory
 
     char batch_uuid[37];
     uuid_t uuid;
@@ -67,19 +68,41 @@ int main(int argc, char *argv[])
     new_meta.width = image_width;
     new_meta.height = image_height;
     new_meta.channels = image_channels;
-    new_meta.timestamp = 0; // example time (should be using unix timestamp)
+    new_meta.timestamp = time.tv_sec; // use current unix timestamp
     new_meta.bits_pixel = bits_per_pixel;
-    new_meta.camera = "rgb";
+    new_meta.camera = "1800 U-507c";
+    new_meta.obid = atoi(argv[3]);
 
     printf("Created meta\r\n");
 
     size_t meta_size = metadata__get_packed_size(&new_meta);
-    uint8_t meta_buf[meta_size];
-    metadata__pack(&new_meta, meta_buf);
+    uint8_t *meta_buf = malloc(meta_size);
+    if (!meta_buf)
+    {
+        perror("malloc");
+        return -1;
+    }
+    size_t packed_len = metadata__pack(&new_meta, meta_buf);
+    if (packed_len != meta_size)
+    {
+        /* keep the authoritative packed length */
+        printf("Warning: packed metadata length (%zu) differs from expected size (%zu)\n",
+               packed_len, meta_size);
+        meta_size = packed_len;
+    }
+
+    // Debug dump
+    fprintf(stderr, "meta_size=%zu\n", meta_size);
+    for (size_t i = 0; i < meta_size; ++i)
+    {
+        fprintf(stderr, "%02x ", meta_buf[i]);
+    }
+    fprintf(stderr, "\n");
 
     printf("Packed meta\r\n");
 
-    uint32_t batch_size = (image_size + sizeof(uint32_t) + meta_size) * data.num_images;
+    uint32_t meta_size32 = (uint32_t)meta_size;
+    uint32_t batch_size = (image_size + sizeof(uint32_t) + meta_size32) * data.num_images;
 
     int shmid = shmget(time.tv_nsec, batch_size, IPC_CREAT | 0666);
     data.shmid = shmid;
@@ -90,10 +113,10 @@ int main(int argc, char *argv[])
     for (size_t i = 0; i < data.num_images; i++)
     {
         // Insert metadata size before metadata
-        memcpy(shmaddr + offset, &meta_size, sizeof(uint32_t));
+        memcpy(shmaddr + offset, &meta_size32, sizeof(meta_size32));
         offset += sizeof(uint32_t);
         printf("Copied size of meta\r\n");
-        memcpy(shmaddr + offset, &meta_buf, meta_size);
+        memcpy(shmaddr + offset, meta_buf, meta_size);
         offset += meta_size;
         printf("Copied meta\r\n");
         // insert image
@@ -102,11 +125,13 @@ int main(int argc, char *argv[])
         {
             perror("Error reading image");
             shmdt(shmaddr);
+            free(meta_buf);
             return -1;
         }
         offset += image_size;
         printf("Copied image\r\n");
     }
+    free(meta_buf);
 
     // create msg queue
     int msg_queue_id;

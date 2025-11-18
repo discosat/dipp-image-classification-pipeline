@@ -23,11 +23,11 @@ enum ERROR_CODE
 void module()
 {
     fs::path dir("/home/root/logs/");
-    fs::path file_name("tflite_" + std::to_string(std::time(0)) + ".txt");
+    fs::path file_name("tflite_segmentation_" + std::to_string(std::time(0)) + ".txt");
     std::string full_path = (dir / file_name).string();
     Logger *logger = logger_create(full_path.c_str());
 
-    logger_log_print(logger, LOG_INFO, "TFlite module started");
+    logger_log_print(logger, LOG_INFO, "TFlite segmentation module started");
 
     /* Get number of images in input batch */
     logger_log(logger, LOG_INFO, "Getting number of images in input batch.");
@@ -44,6 +44,10 @@ void module()
     logger_log(logger, LOG_INFO, "getting class index.");
     int class_idx = get_param_int("class_index");
     logger_log(logger, LOG_INFO, "got class index.");
+
+    logger_log(logger, LOG_INFO, "getting threshold percentage.");
+    float threshold_percentage = get_param_float("threshold_percentage");
+    logger_log(logger, LOG_INFO, "got threshold percentage.");
 
     // Load the model
     logger_log(logger, LOG_INFO, "Building model from file.");
@@ -79,18 +83,25 @@ void module()
 
     // set the caching options
     // const char *allow_cache_key = "allowed_cache_mode";
-    // const char *allow_cache_value = "true";
+    const char *allow_cache_value = "true";
     // const char *cache_file_key = "cache_file_path";
     // const char *cache_file_value = "/tmp/vx_cache";
     // ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
     // ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
+    ext_delegate_option.insert(&ext_delegate_option, "error_during_init", allow_cache_value);
+    ext_delegate_option.insert(&ext_delegate_option, "error_during_prepare", allow_cache_value);
+    ext_delegate_option.insert(&ext_delegate_option, "error_during_invoke", allow_cache_value);
 
     auto ext_delegate_ptr = TfLiteExternalDelegateCreate(&ext_delegate_option);
     logger_log(logger, LOG_INFO, "Delegate loaded.");
 
     // Modify the graph with delegate
     logger_log(logger, LOG_INFO, "Applying delegate");
-    interpreter->ModifyGraphWithDelegate(ext_delegate_ptr);
+    if (interpreter->ModifyGraphWithDelegate(ext_delegate_ptr) != kTfLiteOk)
+    {
+        logger_log(logger, LOG_ERROR, "Failed to apply delegate to graph");
+        signal_error_and_exit(INTERPRET_INIT);
+    }
     logger_log(logger, LOG_INFO, "Delegate applied to graph.");
 
     // Allocate the tensors and get the input tensor
@@ -121,6 +132,7 @@ void module()
         int timestamp = input_meta->timestamp;
         int bits_pixel = input_meta->bits_pixel;
         char *camera = input_meta->camera;
+        int obid = input_meta->obid;
         logger_log(logger, LOG_INFO, "Got metadata");
 
         logger_log(logger, LOG_INFO, "Getting image data");
@@ -128,110 +140,70 @@ void module()
         size_t size = get_image_data(i, &input_image_data);
         logger_log(logger, LOG_INFO, "Got image data.");
 
-        // Define output image (patch)
-        constexpr uint8_t tile_size = 128;
-        int tile_bytes = tile_size * tile_size * channels * sizeof(uint8_t);
-        int tile_idx = 0;
+        // memcpy the entire output image into input tensor
+        logger_log(logger, LOG_INFO, "Copying image data to tensor.");
+        memcpy(
+            input_tensor,
+            input_image_data,
+            size);
+        logger_log(logger, LOG_INFO, "Copied image data to tensor.");
 
-        // Define the arrays that store patches to be passed to next modules
-        logger_log(logger, LOG_INFO, "allocating output image data.");
-        uint8_t *output_image_data = (uint8_t *)malloc(tile_bytes);
-
-        /* Check for malloc error */
-        if (output_image_data == NULL)
+        // infer and deal with the result
+        logger_log(logger, LOG_INFO, "Invoking");
+        if (interpreter->Invoke() != kTfLiteOk)
         {
-            signal_error_and_exit(MALLOC_ERR);
+            signal_error_and_exit(INFER_ERR);
         }
-        logger_log(logger, LOG_INFO, "allocated output image data.");
+        logger_log(logger, LOG_INFO, "Invoked");
 
-        for (uint16_t height_offset = 0; height_offset + tile_size <= height; height_offset += tile_size)
+        logger_log(logger, LOG_INFO, "Applying the segmentation mask.");
+        uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
+
+        int img_size = height * width * channels;
+        int kept_pixels = img_size;
+        for (int i = 0; i < height * width; i++)
         {
-            for (uint16_t width_offset = 0; width_offset + tile_size <= width; width_offset += tile_size)
+            float scaled_score = static_cast<float>(scores[i] - zero_point) * scale;
+            bool keep = true;
+            if (scaled_score < 0.5)
             {
-
-                logger_log(logger, LOG_INFO, "Copying image data.");
-                for (uint16_t h = height_offset; h < tile_size + height_offset; h++)
+                // set to class 0
+                if (class_idx != 0)
                 {
-                    // memcpy row of a patch into the output data
-                    memcpy(
-                        output_image_data + ((h - height_offset) * tile_size * channels),
-                        input_image_data + (h * width * channels + width_offset * channels),
-                        sizeof(uint8_t) * tile_size * channels);
+                    keep = false;
                 }
-                logger_log(logger, LOG_INFO, "Copied image data.");
-
-                // memcpy the entire output image into input tensor
-                logger_log(logger, LOG_INFO, "Copying image data to tensor.");
-                memcpy(
-                    input_tensor,
-                    output_image_data,
-                    tile_bytes);
-                logger_log(logger, LOG_INFO, "Copied image data to tensor.");
-
-                // infer and deal with the result
-                logger_log(logger, LOG_INFO, "Invoking");
-                if (interpreter->Invoke() != kTfLiteOk)
+            }
+            else
+            {
+                if (class_idx != 1)
                 {
-                    signal_error_and_exit(INFER_ERR);
+                    keep = false;
                 }
-                logger_log(logger, LOG_INFO, "Invoked");
+            }
 
-                // Get top class
-                logger_log(logger, LOG_INFO, "Applying the segmentation mask.");
-                uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
-                for (int i = 0; i < tile_size * tile_size; i++)
-                {
-                    float scaled_score = static_cast<float>(scores[i] - zero_point) * scale;
-                    bool keep = true;
-                    if (scaled_score < 0.5)
-                    {
-                        // set to class 0
-                        if (class_idx != 0)
-                        {
-                            keep = false;
-                        }
-                    }
-                    else
-                    {
-                        if (class_idx != 1)
-                        {
-                            keep = false;
-                        }
-                    }
-
-                    if (!keep)
-                    {
-                        // set pixel to black
-                        output_image_data[i * channels + 0] = 0;
-                        output_image_data[i * channels + 1] = 0;
-                        output_image_data[i * channels + 2] = 0;
-                    }
-                }
-                logger_log(logger, LOG_INFO, "Applied the segmentation mask.");
-
-                /* Create image metadata before appending */
-                Metadata new_meta = METADATA__INIT;
-                new_meta.size = tile_bytes;
-                new_meta.width = tile_size;
-                new_meta.height = tile_size;
-                new_meta.channels = channels;
-                new_meta.timestamp = timestamp;
-                new_meta.bits_pixel = bits_pixel;
-                new_meta.camera = camera;
-
-                /* Append the image to the result batch */
-                logger_log(logger, LOG_INFO, "Appending image to result batch.");
-                append_result_image(output_image_data, tile_bytes, &new_meta);
-                logger_log(logger, LOG_INFO, "Appended image to result batch.");
-
-                tile_idx++;
+            if (!keep)
+            {
+                // set pixel to black
+                input_image_data[i * channels + 0] = 0;
+                input_image_data[i * channels + 1] = 0;
+                input_image_data[i * channels + 2] = 0;
+                kept_pixels -= channels;
             }
         }
+        logger_log(logger, LOG_INFO, "Applied the segmentation mask.");
 
-        // Free the tile memory
-        logger_log(logger, LOG_INFO, "Freeing tile memory.");
-        free(output_image_data);
-        logger_log(logger, LOG_INFO, "Freed tile memory.");
+        if ((float)kept_pixels > threshold_percentage * (float)img_size)
+        {
+            /* Append the image to the result batch */
+            logger_log(logger, LOG_INFO, "Appending image to result batch.");
+            Metadata new_meta = METADATA__INIT;
+            if (clone_metadata(input_meta, &new_meta) != 0)
+            {
+                signal_error_and_exit(MALLOC_ERR);
+            }
+            append_result_image(input_image_data, size, &new_meta);
+            logger_log(logger, LOG_INFO, "Appended image to result batch.");
+        }
 
         // Free the input image
         logger_log(logger, LOG_INFO, "Freeing input memory.");
@@ -241,7 +213,7 @@ void module()
         logger_log(logger, LOG_INFO, "Full image finished");
     }
 
-    logger_log_print(logger, LOG_INFO, "TFlite module finished");
+    logger_log_print(logger, LOG_INFO, "TFlite segmentation module finished");
     logger_flush(logger);
     logger_destroy(logger);
 }

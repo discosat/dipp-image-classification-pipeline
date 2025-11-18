@@ -162,6 +162,16 @@ extern "C"
     char *get_custom_metadata_string(Metadata *data, char *key);
 
     /**
+     * Clone metadata from source to destination
+     *
+     * @param src Pointer to source metadata
+     * @param dst Pointer to destination metadata
+     *
+     * @return 0 on success, -1 on failure
+     */
+    int clone_metadata(Metadata *src, Metadata *dst);
+
+    /**
      * Append an image to the resulting batch in the module configuration.
      *
      * @param data Pointer to the image data

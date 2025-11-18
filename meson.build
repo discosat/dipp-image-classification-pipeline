@@ -1,7 +1,9 @@
 project('e2e_pipeline', 'c', 'cpp', version: '0.0.1')
 
 # Compiler and linker flags
-cflags = ['-Wall']
+# Compiler and linker flags
+cflags = ['-Wall', '-g', '-O3']
+cppflags = ['-Wall', '-std=c++17', '-g', '-O3']
 
 # Dependencies
 proto_c_dep = meson.get_compiler('c').find_library('protobuf-c', required: false)
@@ -29,10 +31,11 @@ dirs = include_directories(
 
 # Shared library (SO)
 shared_library(
-    'tflite_tiled_classification',
+    'tflite_classification',
     ['src/tflite_classification.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
 )
 
@@ -42,6 +45,7 @@ shared_library(
     ['src/tflite_binary_segmentation.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
 )
 
@@ -57,7 +61,7 @@ shared_library(
 # Shared library (SO)
 shared_library(
     'demosaic',
-    ['src/demosaic.cpp'] + sources,
+    ['src/demosaic_module.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
     dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
@@ -70,6 +74,15 @@ shared_library(
     include_directories: dirs,
     c_args: cflags,
     dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
+)
+
+# Shared library (SO)
+shared_library(
+    'save_image',
+    ['src/image_saver.cpp'] + sources,
+    include_directories: dirs,
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, uuid_dep],
 )
 
 # Shared library (SO)
@@ -87,6 +100,16 @@ shared_library(
     ['src/crash_and_burn.c'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, uuid_dep],
+)
+
+# Shared library (SO)
+shared_library(
+    'tile',
+    ['src/tile_module.cpp'] + sources,
+    include_directories: dirs,
+    c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, uuid_dep],
 )
 

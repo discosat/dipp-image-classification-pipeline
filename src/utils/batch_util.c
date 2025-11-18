@@ -23,7 +23,28 @@ size_t get_image_data(int index, unsigned char **out)
     {
         signal_error_and_exit(100);
     }
-    memcpy(*out, input->data + image_meta->image_offset, image_meta->size);
+
+    // Calculate offset by parsing through previous images
+    unsigned char *ptr = input->data;
+    for (int i = 0; i <= index; i++)
+    {
+        uint32_t meta_size;
+        memcpy(&meta_size, ptr, sizeof(uint32_t));
+        ptr += sizeof(uint32_t);
+
+        if (i == index)
+        {
+            // Skip metadata to get to image data
+            ptr += meta_size;
+            memcpy(*out, ptr, image_meta->size);
+            break;
+        }
+
+        // Skip metadata and image data for this image
+        Metadata *current_meta = get_metadata(i);
+        ptr += meta_size + current_meta->size;
+    }
+
     return image_meta->size;
 }
 
@@ -34,6 +55,7 @@ void append_result_image(unsigned char *data, uint32_t data_size, Metadata *meta
     uint8_t meta_buf[meta_size];
     metadata__pack(meta, meta_buf);
     size_t block_size = data_size + meta_size + sizeof(uint32_t);
+
     if (result->batch_size == 0)
     {
         result->data = (unsigned char *)malloc(block_size);
@@ -102,7 +124,7 @@ int image_batch_read_data(ImageBatch *batch)
             return FAILURE;
         }
 
-        batch->data = mmap(NULL, batch->batch_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        batch->data = mmap(NULL, batch->batch_size, PROT_READ, MAP_SHARED, fd, 0);
         close(fd);
 
         if (batch->data == MAP_FAILED)

@@ -38,7 +38,7 @@ void unpack_metadata()
         metadata->metadata[image_index]->channels = meta->channels;
         metadata->metadata[image_index]->timestamp = meta->timestamp;
         metadata->metadata[image_index]->bits_pixel = meta->bits_pixel;
-        metadata->metadata[image_index]->image_offset = offset;
+        metadata->metadata[image_index]->obid = meta->obid;
         metadata->metadata[image_index]->camera = strdup(meta->camera);
         metadata->metadata[image_index]->n_items = meta->n_items;
         metadata->metadata[image_index]->items = malloc(meta->n_items * sizeof(MetadataItem *));
@@ -84,7 +84,8 @@ void unpack_metadata()
     }
 }
 
-static MetadataItem *get_item(Metadata *data, const char *key) {
+static MetadataItem *get_item(Metadata *data, const char *key)
+{
     MetadataItem *found_item = NULL;
     for (size_t i = 0; i < data->n_items; i++)
     {
@@ -167,7 +168,7 @@ int get_custom_metadata_bool(Metadata *data, char *key)
     {
         signal_error_and_exit(507);
     }
-    
+
     return found_item->bool_value;
 }
 
@@ -179,7 +180,7 @@ int get_custom_metadata_int(Metadata *data, char *key)
     {
         signal_error_and_exit(508);
     }
-    
+
     return found_item->int_value;
 }
 
@@ -191,7 +192,7 @@ float get_custom_metadata_float(Metadata *data, char *key)
     {
         signal_error_and_exit(509);
     }
-    
+
     return found_item->float_value;
 }
 
@@ -203,7 +204,7 @@ char *get_custom_metadata_string(Metadata *data, char *key)
     {
         signal_error_and_exit(510);
     }
-    
+
     return found_item->string_value;
 }
 
@@ -212,4 +213,46 @@ Metadata *get_metadata(int index)
     if (index >= metadata->n_metadata)
         return NULL;
     return metadata->metadata[index];
+}
+
+int clone_metadata(Metadata *src, Metadata *dst)
+{
+    if (src == NULL || dst == NULL)
+    {
+        return -1;
+    }
+
+    dst->size = src->size;
+    dst->height = src->height;
+    dst->width = src->width;
+    dst->channels = src->channels;
+    dst->timestamp = src->timestamp;
+    dst->bits_pixel = src->bits_pixel;
+    dst->obid = src->obid;
+    dst->camera = strdup(src->camera);
+
+    for (size_t i = 0; i < src->n_items; i++)
+    {
+        char *key = strdup(src->items[i]->key);
+
+        switch (src->items[i]->value_case)
+        {
+        case METADATA_ITEM__VALUE_BOOL_VALUE:
+            add_custom_metadata_bool(dst, key, src->items[i]->bool_value);
+            break;
+        case METADATA_ITEM__VALUE_INT_VALUE:
+            add_custom_metadata_int(dst, key, src->items[i]->int_value);
+            break;
+        case METADATA_ITEM__VALUE_FLOAT_VALUE:
+            add_custom_metadata_float(dst, key, src->items[i]->float_value);
+            break;
+        case METADATA_ITEM__VALUE_STRING_VALUE:
+            add_custom_metadata_string(dst, key, strdup(src->items[i]->string_value));
+            break;
+        default:
+            break;
+        }
+    }
+
+    return 0;
 }

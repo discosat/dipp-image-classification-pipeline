@@ -50,6 +50,9 @@ typedef struct ModuleParameter
 typedef struct ModuleParameterList
 {
     size_t n_parameters;
+    uint32_t hash;
+    uint32_t latency_cost;
+    uint32_t energy_cost;
     ModuleParameter **parameters;
 } ModuleParameterList;
 

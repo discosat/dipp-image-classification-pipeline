@@ -59,9 +59,6 @@ void module()
             signal_error_and_exit(INVALID_NEW_INPUT_VALUES);
         }
 
-        printf("[DEBUG]bits per pixel: %d\n", bits_pixel);
-        printf("[DEBUG]channels; %d\n", channels);
-
         cv::Mat rawImage;
         if (channels == 1)
         {
@@ -81,6 +78,7 @@ void module()
             signal_error_and_exit(OPENCV_ERR);
         }
 
+        std::cout << "Resizing image to " << new_width << "x" << new_height << std::endl;
         cv::Mat thumbnailImage;
         cv::resize(rawImage, thumbnailImage, cv::Size(new_width, new_height), 0, 0, cv::INTER_CUBIC);
 
@@ -89,9 +87,12 @@ void module()
             signal_error_and_exit(OPENCV_RES_ERR);
         }
 
+        std::cout << "Resized image size: " << thumbnailImage.cols << "x" << thumbnailImage.rows << std::endl;
+
         /* Calculate output image size */
         size_t output_size = thumbnailImage.total() * thumbnailImage.elemSize();
 
+        std::cout << "Output image size in bytes: " << output_size << std::endl;
         /* Allocate memory for output image data */
         unsigned char *output_image_data = (unsigned char *)malloc(output_size);
 
@@ -101,18 +102,21 @@ void module()
             signal_error_and_exit(MALLOC_ERR);
         }
 
+        std::cout << "Allocated memory for output image data" << std::endl;
+
         /* Copy demosaiced data to output buffer */
         memcpy(output_image_data, thumbnailImage.data, output_size);
+        std::cout << "Copied resized image data to output buffer" << std::endl;
 
         /* Create output image metadata */
         Metadata new_meta = METADATA__INIT;
+        if (clone_metadata(input_meta, &new_meta) != 0)
+        {
+            signal_error_and_exit(MALLOC_ERR);
+        }
         new_meta.size = output_size;
-        new_meta.width = new_width;
         new_meta.height = new_height;
-        new_meta.channels = channels;
-        new_meta.bits_pixel = input_meta->bits_pixel;
-        new_meta.timestamp = input_meta->timestamp;
-        strcpy(new_meta.camera, input_meta->camera);
+        new_meta.width = new_width;
 
         /* Append the processed image to the result batch */
         append_result_image(output_image_data, output_size, &new_meta);

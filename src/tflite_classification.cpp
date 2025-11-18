@@ -9,6 +9,13 @@
 #include <tensorflow/lite/model.h>
 #include <tensorflow/lite/optional_debug_tools.h>
 
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <numeric> // For std::accumulate to calculate size
+#include <cstdlib> // srand, rand
+#include <ctime>   // time
+
 namespace fs = std::filesystem;
 /* Define custom error codes */
 enum ERROR_CODE
@@ -19,15 +26,63 @@ enum ERROR_CODE
     INFER_ERR = 4,
 };
 
+/**
+ * @brief Prints the type of a TfLiteType.
+ * @param type The TfLiteType enum value.
+ * @return A string name for the type.
+ */
+const char *TfLiteTypeGetName(TfLiteType type)
+{
+    switch (type)
+    {
+    case kTfLiteNoType:
+        return "kTfLiteNoType";
+    case kTfLiteFloat32:
+        return "kTfLiteFloat32";
+    case kTfLiteInt32:
+        return "kTfLiteInt32";
+    case kTfLiteUInt8:
+        return "kTfLiteUInt8";
+    case kTfLiteInt64:
+        return "kTfLiteInt64";
+    case kTfLiteString:
+        return "kTfLiteString";
+    case kTfLiteBool:
+        return "kTfLiteBool";
+    case kTfLiteInt16:
+        return "kTfLiteInt16";
+    case kTfLiteComplex64:
+        return "kTfLiteComplex64";
+    case kTfLiteInt8:
+        return "kTfLiteInt8";
+    case kTfLiteFloat16:
+        return "kTfLiteFloat16";
+    case kTfLiteFloat64:
+        return "kTfLiteFloat64";
+    case kTfLiteComplex128:
+        return "kTfLiteComplex128";
+    case kTfLiteUInt64:
+        return "kTfLiteUInt64";
+    case kTfLiteResource:
+        return "kTfLiteResource";
+    case kTfLiteVariant:
+        return "kTfLiteVariant";
+    case kTfLiteUInt32:
+        return "kTfLiteUInt32";
+    default:
+        return "Unknown";
+    }
+}
+
 /* START MODULE IMPLEMENTATION */
 void module()
 {
     fs::path dir("/home/root/logs/");
-    fs::path file_name("tflite_" + std::to_string(std::time(0)) + ".txt");
+    fs::path file_name("tflite_classification_" + std::to_string(std::time(0)) + ".txt");
     std::string full_path = (dir / file_name).string();
     Logger *logger = logger_create(full_path.c_str());
 
-    logger_log_print(logger, LOG_INFO, "TFlite module started");
+    logger_log_print(logger, LOG_INFO, "TFlite classification module started");
 
     /* Get number of images in input batch */
     logger_log(logger, LOG_INFO, "Getting number of images in input batch.");
@@ -39,7 +94,8 @@ void module()
     char *model_filename = get_param_string("model_filename");
     logger_log(logger, LOG_INFO, "got model filename.");
 
-    /* Retrieve the class idx of interest */
+    // Retrieve the class idx of interest
+    // This is the class that will be kept, the other class will be set to all black for better compression
     logger_log(logger, LOG_INFO, "getting class index.");
     int class_idx = get_param_int("class_index");
     logger_log(logger, LOG_INFO, "got class index.");
@@ -78,34 +134,41 @@ void module()
 
     // set the caching options
     // const char *allow_cache_key = "allowed_cache_mode";
-    // const char *allow_cache_value = "true";
+    const char *allow_cache_value = "true";
     // const char *cache_file_key = "cache_file_path";
     // const char *cache_file_value = "/tmp/vx_cache";
     // ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
     // ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
+    ext_delegate_option.insert(&ext_delegate_option, "error_during_init", allow_cache_value);
+    ext_delegate_option.insert(&ext_delegate_option, "error_during_prepare", allow_cache_value);
+    ext_delegate_option.insert(&ext_delegate_option, "error_during_invoke", allow_cache_value);
 
     auto ext_delegate_ptr = TfLiteExternalDelegateCreate(&ext_delegate_option);
     logger_log(logger, LOG_INFO, "Delegate loaded.");
 
     // Modify the graph with delegate
     logger_log(logger, LOG_INFO, "Applying delegate");
-    interpreter->ModifyGraphWithDelegate(ext_delegate_ptr);
+    if (interpreter->ModifyGraphWithDelegate(ext_delegate_ptr) != kTfLiteOk)
+    {
+        logger_log(logger, LOG_ERROR, "Failed to apply delegate to graph");
+        signal_error_and_exit(INTERPRET_INIT);
+    }
     logger_log(logger, LOG_INFO, "Delegate applied to graph.");
 
-    // Allocate the tensors and get the input tensor
+    // Allocate the tensors
     logger_log(logger, LOG_INFO, "allocating tensors");
     if (interpreter->AllocateTensors() != kTfLiteOk)
     {
         signal_error_and_exit(TENSOR_ALLOC);
     }
-    uint8_t *input_tensor = interpreter->typed_input_tensor<uint8_t>(0);
-    logger_log(logger, LOG_INFO, "Tensor allocated.");
+    logger_log(logger, LOG_INFO, "Tensors allocated.");
 
     // Get quantization parameters
     logger_log(logger, LOG_INFO, "Getting quantization parameters.");
     const auto *output_tensor = interpreter->output_tensor(0);
     const float scale = output_tensor->params.scale;
     const float zero_point = output_tensor->params.zero_point;
+    TfLiteType out_type = output_tensor->type;
     logger_log(logger, LOG_INFO, "Got quantization parameters.");
 
     // Get output dimensions
@@ -114,6 +177,7 @@ void module()
     TfLiteIntArray *output_dims = interpreter->tensor(output)->dims;
     // assume output dims to be something like (1, 1, ... ,size)
     auto output_size = output_dims->data[output_dims->size - 1];
+
     logger_log(logger, LOG_INFO, "Got output dimensions.");
 
     for (int i = 0; i < num_images; ++i)
@@ -128,6 +192,7 @@ void module()
         int timestamp = input_meta->timestamp;
         int bits_pixel = input_meta->bits_pixel;
         char *camera = input_meta->camera;
+        int obid = input_meta->obid;
         logger_log(logger, LOG_INFO, "Got metadata");
 
         logger_log(logger, LOG_INFO, "Getting image data");
@@ -135,101 +200,64 @@ void module()
         size_t size = get_image_data(i, &input_image_data);
         logger_log(logger, LOG_INFO, "Got image data.");
 
-        // Define output image (patch)
-        constexpr uint8_t tile_size = 224;
-        int tile_bytes = tile_size * tile_size * channels * sizeof(uint8_t);
-        int tile_idx = 0;
+        // Get input tensor pointer and expected size each iteration (avoid stale pointer)
+        int input_index = interpreter->inputs()[0];
+        uint8_t *input_tensor = interpreter->typed_tensor<uint8_t>(input_index);
 
-        // Define the arrays that store patches to be passed to next modules
-        logger_log(logger, LOG_INFO, "allocating output image data.");
-        uint8_t *output_image_data = (uint8_t *)malloc(tile_bytes);
+        TfLiteTensor *in_tensor = interpreter->tensor(input_index);
+        size_t expected_bytes = in_tensor->bytes;
 
-        /* Check for malloc error */
-        if (output_image_data == NULL)
+        // Copy image data to tensor
+        logger_log(logger, LOG_INFO, "Copying image data to tensor.");
+        memcpy(input_tensor, input_image_data, expected_bytes);
+        logger_log(logger, LOG_INFO, "Copied image data to tensor.");
+
+        // infer and deal with the result
+        logger_log(logger, LOG_INFO, "Invoking");
+        if (interpreter->Invoke() != kTfLiteOk)
         {
-            signal_error_and_exit(MALLOC_ERR);
+            signal_error_and_exit(INFER_ERR);
         }
-        logger_log(logger, LOG_INFO, "allocated output image data.");
+        logger_log(logger, LOG_INFO, "Invoked");
 
-        for (uint16_t height_offset = 0; height_offset + tile_size <= height; height_offset += tile_size)
+        // Get top class
+        logger_log(logger, LOG_INFO, "Getting the top class.");
+        // uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
+        float max_val = -1.0;
+        int max_cls = -1;
+        uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
+        for (int j = 0; j < output_size; ++j)
         {
-            for (uint16_t width_offset = 0; width_offset + tile_size <= width; width_offset += tile_size)
+            float scaled_score = static_cast<float>(scores[j] - zero_point) * scale;
+            if (scaled_score > max_val)
             {
-
-                logger_log(logger, LOG_INFO, "Copying image data.");
-                for (uint16_t h = height_offset; h < tile_size + height_offset; h++)
-                {
-                    // memcpy row of a patch into the output data
-                    memcpy(
-                        output_image_data + ((h - height_offset) * tile_size * channels),
-                        input_image_data + (h * width * channels + width_offset * channels),
-                        sizeof(uint8_t) * tile_size * channels);
-                }
-                logger_log(logger, LOG_INFO, "Copied image data.");
-
-                // memcpy the entire output image into input tensor
-                logger_log(logger, LOG_INFO, "Copying image data to tensor.");
-                memcpy(
-                    input_tensor,
-                    output_image_data,
-                    tile_bytes);
-                logger_log(logger, LOG_INFO, "Copied image data to tensor.");
-
-                // infer and deal with the result
-                logger_log(logger, LOG_INFO, "Invoking");
-                if (interpreter->Invoke() != kTfLiteOk)
-                {
-                    signal_error_and_exit(INFER_ERR);
-                }
-                logger_log(logger, LOG_INFO, "Invoked");
-
-                // Get top class
-                logger_log(logger, LOG_INFO, "Getting top class.");
-                uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
-                float max_val = -1.0;
-                int max_cls = -1;
-                for (int i = 0; i < output_size; i++)
-                {
-                    float scaled_score = static_cast<float>(scores[i] - zero_point) * scale;
-                    if (scaled_score > max_val)
-                    {
-                        max_val = scaled_score;
-                        max_cls = i;
-                    }
-                }
-                logger_log(logger, LOG_INFO, "Got top class.");
-
-                // send only the patches that match the class idx of interest
-                if (max_cls == class_idx)
-                {
-                    /* Create image metadata before appending */
-                    Metadata new_meta = METADATA__INIT;
-                    new_meta.size = tile_bytes;
-                    new_meta.width = tile_size;
-                    new_meta.height = tile_size;
-                    new_meta.channels = channels;
-                    new_meta.timestamp = timestamp;
-                    new_meta.bits_pixel = bits_pixel;
-                    new_meta.camera = camera;
-
-                    // /* Add custom metadata key-value for prediction */
-                    // logger_log(logger, LOG_INFO, "Adding custom metadata.");
-                    // add_custom_metadata_int(&new_meta, "prediction", max_cls);
-                    // logger_log(logger, LOG_INFO, "Added custom metadata.");
-
-                    /* Append the image to the result batch */
-                    logger_log(logger, LOG_INFO, "Appending image to result batch.");
-                    append_result_image(output_image_data, tile_bytes, &new_meta);
-                    logger_log(logger, LOG_INFO, "Appended image to result batch.");
-                }
-                tile_idx++;
+                max_val = scaled_score;
+                max_cls = j;
             }
         }
 
-        // Free the tile memory
-        logger_log(logger, LOG_INFO, "Freeing tile memory.");
-        free(output_image_data);
-        logger_log(logger, LOG_INFO, "Freed tile memory.");
+        logger_log(logger, LOG_INFO, "Got the top class.");
+
+        // send only the patches that match the class idx of interest
+        if (max_cls == class_idx)
+        {
+            logger_log(logger, LOG_INFO, "Adding the image to the result batch.");
+            Metadata new_meta = METADATA__INIT;
+            if (clone_metadata(input_meta, &new_meta) != 0)
+            {
+                signal_error_and_exit(MALLOC_ERR);
+            }
+
+            /* Add custom metadata key-value for prediction */
+            logger_log(logger, LOG_INFO, "Adding custom metadata.");
+            add_custom_metadata_int(&new_meta, "prediction", max_cls);
+            logger_log(logger, LOG_INFO, "Added custom metadata.");
+
+            /* Append the image to the result batch */
+            logger_log(logger, LOG_INFO, "Appending image to result batch.");
+            append_result_image(input_image_data, size, &new_meta);
+            logger_log(logger, LOG_INFO, "Appended image to result batch.");
+        }
 
         // Free the input image
         logger_log(logger, LOG_INFO, "Freeing input memory.");
@@ -239,7 +267,7 @@ void module()
         logger_log(logger, LOG_INFO, "Full image finished");
     }
 
-    logger_log_print(logger, LOG_INFO, "TFlite module finished");
+    logger_log_print(logger, LOG_INFO, "TFlite classification module finished");
     logger_flush(logger);
     logger_destroy(logger);
 }
