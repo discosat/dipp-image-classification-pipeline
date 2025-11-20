@@ -8,7 +8,9 @@ cppflags = ['-Wall', '-std=c++17', '-g', '-O3']
 # Dependencies
 proto_c_dep = meson.get_compiler('c').find_library('protobuf-c', required: false)
 rt_dep = meson.get_compiler('c').find_library('rt', required: false)
-jxl_dep = meson.get_compiler('cpp').find_library('libjxl', required: true)
+# jxl_dep = meson.get_compiler('cpp').find_library('libjxl', required: true)
+jxl_dep = dependency('libjxl', required: true)
+jxl_threads_dep = dependency('libjxl_threads', required: true)
 uuid_dep = meson.get_compiler('c').find_library('uuid', required: false)
 tflite_dep = dependency('tensorflow2-lite')
 opencv_dep = dependency('opencv4')
@@ -55,7 +57,17 @@ shared_library(
     ['src/jpegxl_encode.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
-    dependencies: [rt_dep, proto_c_dep, jxl_dep, uuid_dep],
+    cpp_args: cppflags,
+    dependencies: [rt_dep, proto_c_dep, jxl_dep, jxl_threads_dep,uuid_dep],
+)
+
+# Shared library (SO)
+shared_library(
+    'jpegxl_module',
+    ['src/jpegxl_module.c'] + sources,
+    include_directories: dirs,
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, jxl_dep, jxl_threads_dep, uuid_dep],
 )
 
 # Shared library (SO)
@@ -64,6 +76,7 @@ shared_library(
     ['src/demosaic_module.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
 )
 
@@ -73,6 +86,7 @@ shared_library(
     ['src/resize_module.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, opencv_dep, uuid_dep],
 )
 
@@ -82,6 +96,7 @@ shared_library(
     ['src/image_saver.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, uuid_dep],
 )
 
@@ -91,6 +106,7 @@ shared_library(
     ['src/single_module.cpp'] + sources,
     include_directories: dirs,
     c_args: cflags,
+    cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, opencv_dep, tflite_dep, jxl_dep, uuid_dep],
 )
 

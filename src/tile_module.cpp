@@ -44,10 +44,6 @@ void module()
         int height = input_meta->height;
         int width = input_meta->width;
         int channels = input_meta->channels;
-        int timestamp = input_meta->timestamp;
-        int bits_pixel = input_meta->bits_pixel;
-        char *camera = input_meta->camera;
-        int obid = input_meta->obid;
         logger_log(logger, LOG_INFO, "Got metadata");
 
         logger_log(logger, LOG_INFO, "Getting image data");
@@ -64,7 +60,7 @@ void module()
             signal_error_and_exit(MALLOC_ERR);
         }
 
-        if (bits_pixel <= 8)
+        if (input_meta->bits_pixel <= 8)
         {
             for (size_t pix = 0; pix < parsed_size; pix++)
             {
@@ -75,7 +71,7 @@ void module()
         else
         {
             // Convert 16-bit samples down to 8-bit consistently (right-shift)
-            int shift = bits_pixel - 8;
+            int shift = input_meta->bits_pixel - 8;
             if (shift < 0)
                 shift = 0;
             for (size_t pix = 0; pix < parsed_size; pix++)

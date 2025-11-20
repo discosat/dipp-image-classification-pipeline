@@ -12,9 +12,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
-#include <numeric> // For std::accumulate to calculate size
-#include <cstdlib> // srand, rand
-#include <ctime>   // time
+#include <ctime> // time
 
 namespace fs = std::filesystem;
 /* Define custom error codes */
@@ -25,54 +23,6 @@ enum ERROR_CODE
     TENSOR_ALLOC = 3,
     INFER_ERR = 4,
 };
-
-/**
- * @brief Prints the type of a TfLiteType.
- * @param type The TfLiteType enum value.
- * @return A string name for the type.
- */
-const char *TfLiteTypeGetName(TfLiteType type)
-{
-    switch (type)
-    {
-    case kTfLiteNoType:
-        return "kTfLiteNoType";
-    case kTfLiteFloat32:
-        return "kTfLiteFloat32";
-    case kTfLiteInt32:
-        return "kTfLiteInt32";
-    case kTfLiteUInt8:
-        return "kTfLiteUInt8";
-    case kTfLiteInt64:
-        return "kTfLiteInt64";
-    case kTfLiteString:
-        return "kTfLiteString";
-    case kTfLiteBool:
-        return "kTfLiteBool";
-    case kTfLiteInt16:
-        return "kTfLiteInt16";
-    case kTfLiteComplex64:
-        return "kTfLiteComplex64";
-    case kTfLiteInt8:
-        return "kTfLiteInt8";
-    case kTfLiteFloat16:
-        return "kTfLiteFloat16";
-    case kTfLiteFloat64:
-        return "kTfLiteFloat64";
-    case kTfLiteComplex128:
-        return "kTfLiteComplex128";
-    case kTfLiteUInt64:
-        return "kTfLiteUInt64";
-    case kTfLiteResource:
-        return "kTfLiteResource";
-    case kTfLiteVariant:
-        return "kTfLiteVariant";
-    case kTfLiteUInt32:
-        return "kTfLiteUInt32";
-    default:
-        return "Unknown";
-    }
-}
 
 /* START MODULE IMPLEMENTATION */
 void module()
@@ -133,12 +83,15 @@ void module()
         TfLiteExternalDelegateOptionsDefault("/usr/lib/libvx_delegate.so");
 
     // set the caching options
-    // const char *allow_cache_key = "allowed_cache_mode";
+    const char *allow_cache_key = "allowed_cache_mode";
     const char *allow_cache_value = "true";
-    // const char *cache_file_key = "cache_file_path";
-    // const char *cache_file_value = "/tmp/vx_cache";
-    // ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
-    // ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
+    const char *cache_file_key = "cache_file_path";
+    // get the last part of the model filename to use in cache file name
+    std::string cache_filename = std::string("cache_") + fs::path(model_filename).filename().string();
+
+    const char *cache_file_value = cache_filename.c_str();
+    ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
+    ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
     ext_delegate_option.insert(&ext_delegate_option, "error_during_init", allow_cache_value);
     ext_delegate_option.insert(&ext_delegate_option, "error_during_prepare", allow_cache_value);
     ext_delegate_option.insert(&ext_delegate_option, "error_during_invoke", allow_cache_value);
@@ -168,7 +121,6 @@ void module()
     const auto *output_tensor = interpreter->output_tensor(0);
     const float scale = output_tensor->params.scale;
     const float zero_point = output_tensor->params.zero_point;
-    TfLiteType out_type = output_tensor->type;
     logger_log(logger, LOG_INFO, "Got quantization parameters.");
 
     // Get output dimensions
@@ -186,13 +138,10 @@ void module()
 
         logger_log(logger, LOG_INFO, "Getting metadata");
         Metadata *input_meta = get_metadata(i);
-        int height = input_meta->height;
-        int width = input_meta->width;
-        int channels = input_meta->channels;
-        int timestamp = input_meta->timestamp;
-        int bits_pixel = input_meta->bits_pixel;
-        char *camera = input_meta->camera;
-        int obid = input_meta->obid;
+        // int height = input_meta->height;
+        // int width = input_meta->width;
+        // int channels = input_meta->channels;
+        // int bits_pixel = input_meta->bits_pixel;
         logger_log(logger, LOG_INFO, "Got metadata");
 
         logger_log(logger, LOG_INFO, "Getting image data");
@@ -236,7 +185,10 @@ void module()
             }
         }
 
-        logger_log(logger, LOG_INFO, "Got the top class.");
+        char buffer[100];
+        sprintf(buffer, "Top class: %d with score %.4f", max_cls, max_val);
+        logger_log(logger, LOG_INFO, buffer);
+        // logger_log(logger, LOG_INFO, "Got the top class.");
 
         // send only the patches that match the class idx of interest
         if (max_cls == class_idx)

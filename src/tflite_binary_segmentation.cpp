@@ -82,12 +82,15 @@ void module()
         TfLiteExternalDelegateOptionsDefault("/usr/lib/libvx_delegate.so");
 
     // set the caching options
-    // const char *allow_cache_key = "allowed_cache_mode";
+    const char *allow_cache_key = "allowed_cache_mode";
     const char *allow_cache_value = "true";
-    // const char *cache_file_key = "cache_file_path";
-    // const char *cache_file_value = "/tmp/vx_cache";
-    // ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
-    // ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
+    const char *cache_file_key = "cache_file_path";
+    // get the last part of the model filename to use in cache file name
+    std::string cache_filename = std::string("cache_") + fs::path(model_filename).filename().string();
+
+    const char *cache_file_value = cache_filename.c_str();
+    ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
+    ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
     ext_delegate_option.insert(&ext_delegate_option, "error_during_init", allow_cache_value);
     ext_delegate_option.insert(&ext_delegate_option, "error_during_prepare", allow_cache_value);
     ext_delegate_option.insert(&ext_delegate_option, "error_during_invoke", allow_cache_value);
@@ -129,10 +132,6 @@ void module()
         int height = input_meta->height;
         int width = input_meta->width;
         int channels = input_meta->channels;
-        int timestamp = input_meta->timestamp;
-        int bits_pixel = input_meta->bits_pixel;
-        char *camera = input_meta->camera;
-        int obid = input_meta->obid;
         logger_log(logger, LOG_INFO, "Got metadata");
 
         logger_log(logger, LOG_INFO, "Getting image data");
@@ -161,9 +160,9 @@ void module()
 
         int img_size = height * width * channels;
         int kept_pixels = img_size;
-        for (int i = 0; i < height * width; i++)
+        for (int pix = 0; pix < height * width; pix++)
         {
-            float scaled_score = static_cast<float>(scores[i] - zero_point) * scale;
+            float scaled_score = static_cast<float>(scores[pix] - zero_point) * scale;
             bool keep = true;
             if (scaled_score < 0.5)
             {
@@ -184,13 +183,16 @@ void module()
             if (!keep)
             {
                 // set pixel to black
-                input_image_data[i * channels + 0] = 0;
-                input_image_data[i * channels + 1] = 0;
-                input_image_data[i * channels + 2] = 0;
+                input_image_data[pix * channels + 0] = 0;
+                input_image_data[pix * channels + 1] = 0;
+                input_image_data[pix * channels + 2] = 0;
                 kept_pixels -= channels;
             }
         }
         logger_log(logger, LOG_INFO, "Applied the segmentation mask.");
+        char buffer[100];
+        sprintf(buffer, "Kept pixels: %d out of %d", kept_pixels, img_size);
+        logger_log(logger, LOG_INFO, buffer);
 
         if ((float)kept_pixels > threshold_percentage * (float)img_size)
         {

@@ -44,10 +44,6 @@ void module()
         int height = input_meta->height;
         int width = input_meta->width;
         int channels = input_meta->channels;
-        int timestamp = input_meta->timestamp;
-        int bits_pixel = input_meta->bits_pixel;
-        char *camera = input_meta->camera;
-        int obid = input_meta->obid;
 
         if (height <= 0 || width <= 0 || channels <= 0)
         {

@@ -179,6 +179,7 @@ ImageBatch run(ImageBatch *input_batch, ModuleParameterList *module_parameter_li
     input = input_batch;
     config = module_parameter_list;
     error_pipe = ipc_error_pipe;
+
     initialize();
 
     module();
