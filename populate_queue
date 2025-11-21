@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Check if all arguments are provided
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <number_of_times> <pipeline_idx> <obid> <file_path>"
+    exit 1
+fi
+
+# Assign arguments to variables
+N=$1
+PIPELINE_IDX=$2
+OBID=$3
+FILE_PATH=$4
+
+# Check if N is a valid number
+if ! [[ "$N" =~ ^[0-9]+$ ]]; then
+    echo "Error: Argument must be a positive integer."
+    exit 1
+fi
+
+echo "Starting execution of ./emulate_camera $N times..."
+
+# Loop N times
+for ((i=1; i<=N; i++))
+do
+    echo "Iteration $i of $N"
+    ./emulate_camera "$PIPELINE_IDX" "$OBID" "$FILE_PATH"
+    
+    # Optional: Add a small delay if needed (uncomment below)
+    # sleep 1
+done
+
+echo "Completed $N iterations."
