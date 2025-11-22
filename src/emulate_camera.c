@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
     data.pipeline_id = atoi(argv[2]);
 
     // generate a random latency between 0 and 100 seconds
+    srand(time(0));
     int latency = rand() % 100;
     // get current time in seconds
     struct timespec time;

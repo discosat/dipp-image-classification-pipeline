@@ -107,13 +107,10 @@ void module()
     case SHM_INCREASE_OVERFLOW:
         Metadata *input_meta = get_metadata(0);
         Metadata new_meta = METADATA__INIT;
-        new_meta.size = input_meta->size;
-        new_meta.width = input_meta->width;
-        new_meta.height = input_meta->height;
-        new_meta.channels = input_meta->channels;
-        new_meta.timestamp = input_meta->timestamp;
-        new_meta.bits_pixel = input_meta->bits_pixel;
-        new_meta.camera = input_meta->camera;
+        if (clone_metadata(input_meta, &new_meta) != 0)
+        {
+            signal_error_and_exit(10);
+        }
 
         unsigned char *image_data;
         uint32_t image_size = get_image_data(0, &image_data);
