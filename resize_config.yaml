@@ -1,0 +1,9 @@
+# Use following keys for type  #
+#   bool    = 2                #
+#   int     = 3                #
+#   float   = 4                #
+#   string  = 5                #
+
+- key: target_size
+  type: 3
+  value: 128

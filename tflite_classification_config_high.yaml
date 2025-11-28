@@ -1,0 +1,12 @@
+# Use following keys for type  #
+#   bool    = 2                #
+#   int     = 3                #
+#   float   = 4                #
+#   string  = 5                #
+
+- key: model_filename
+  type: 5
+  value: /home/root/EfficientNetV2S.tflite
+- key: class_index
+  type: 3
+  value: 0 # in the segmentation model, class 1 for clouds

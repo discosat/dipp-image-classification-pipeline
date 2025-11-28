@@ -1,0 +1,33 @@
+pipeline:
+- name: preprocessing
+  implementations:
+    - param_id: 0
+      effort_level: default
+- name: classification
+  implementations:
+    - param_id: 1
+      effort_level: low
+    - param_id: 2
+      effort_level: medium
+    - param_id: 3
+      effort_level: high
+- name: resizing
+  implementations:
+    - param_id: 4
+      effort_level: default
+- name: segmentation
+  implementations:
+    - param_id: 5
+      effort_level: low
+    - param_id: 6
+      effort_level: medium
+    - param_id: 7
+      effort_level: high
+- name: encoding
+  implementations:
+    - param_id: 8
+      effort_level: low
+    - param_id: 9
+      effort_level: medium
+    - param_id: 10
+      effort_level: high

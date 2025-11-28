@@ -33,9 +33,11 @@ int main(int argc, char *argv[])
     data.num_images = atoi(argv[1]);
     data.pipeline_id = atoi(argv[2]);
 
-    // generate a random latency between 0 and 100 seconds
+    // generate a random latency between 60 and 120 seconds
     srand(time(0));
-    int latency = rand() % 100;
+    // int latency = rand() % 60 + 60;
+    // 1 minute to process query
+    int latency = 60;
     // get current time in seconds
     struct timespec time;
     if (clock_gettime(CLOCK_MONOTONIC, &time) < 0)
