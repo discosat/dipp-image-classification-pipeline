@@ -6,7 +6,10 @@
 
 - key: model_filename
   type: 5
-  value: /home/root/mobilenetv2_035_unet.tflite
+  value: /usr/share/models/custom_tiny_conv_unet.tflite
 - key: class_index
   type: 3
-  value: 9 # lass 9 is sea
+  value: 0 # class 1 are clouds, we would like to keep 0
+- key: threshold_percentage
+  type: 4
+  value: 0.7 # 70% of tile needs to be non-cloud-covered

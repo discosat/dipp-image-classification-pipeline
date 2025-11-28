@@ -4,9 +4,9 @@
 #   float   = 4                #
 #   string  = 5                #
 
-- key: model_filename
-  type: 5
-  value: /home/root/EfficientNetV2S.tflite
-- key: class_index
-  type: 3
-  value: 0 # in the segmentation model, class 1 for clouds
+  - key: model_filename
+    type: 5
+    value: /usr/share/models/mobilenetv2_14_landcover.tflite
+  - key: class_index
+    type: 3
+    value: 7 # this is just for testing, 9 is sea

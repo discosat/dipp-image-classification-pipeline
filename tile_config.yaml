@@ -1,0 +1,6 @@
+- key: tile_height
+  type: 3
+  value: 224
+- key: tile_width
+  type: 3
+  value: 224
