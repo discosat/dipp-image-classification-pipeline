@@ -1,0 +1,24 @@
+# Stub for libhwy, required only to satisfy pkg-config.
+#
+# The SDK at /opt/fus-imx-disco/5.15-kirkstone ships libjxl 0.10.2 whose
+# libjxl.pc declares `Requires.private: libhwy`, but the sysroot contains no
+# libhwy at all -- no .pc, no library, no headers -- so `meson setup` fails
+# before it can configure anything.
+#
+# Requires.private matters only for STATIC linking, and hwy is not needed here:
+#   - libjxl.so.0.10.2 has no DT_NEEDED entry for libhwy (hwy is linked in
+#     statically), verified with objdump -p;
+#   - no header under sysroot usr/include/jxl includes hwy/;
+#   - the board carries libjxl 0.10.2 and 0.12.0 and no libhwy whatsoever.
+#
+# So an empty stub is accurate rather than a workaround that hides a real gap.
+# Use with:  PKG_CONFIG_PATH=tools/pkgconfig-overlay:$PKG_CONFIG_PATH
+#
+# The clean fix is to install a real libhwy into the SDK sysroot; until then
+# this keeps the module build reproducible.
+
+Name: libhwy
+Description: Stub - hwy is statically linked into libjxl in this SDK
+Version: 1.0.0
+Cflags:
+Libs:
