@@ -52,6 +52,17 @@ void finalize()
 
         close(fd);
 
+        /* Durability barrier. The old ordering was write -> munmap -> remove(old),
+           which unlinked the only surviving copy while the new one was still
+           dirty page cache under a 30 s writeback expiry -- a window spanning
+           several pipeline executions, and a reset inside it lost BOTH copies.
+           msync first, so the new file is on storage before the old one goes. */
+        if (msync(persisted_batch, result->batch_size, MS_SYNC) == -1)
+        {
+            signal_error_and_exit(301);
+            return;
+        }
+
         if (munmap(persisted_batch, result->batch_size) == -1)
         {
             signal_error_and_exit(301);
@@ -61,7 +72,7 @@ void finalize()
         // change the filename of the result batch
         strcpy(result->filename, batch_filename);
 
-        // delete the old batch file
+        // Only now is it safe to drop the input: the successor is durable.
         if (remove(input->filename) != 0)
         {
             signal_error_and_exit(305);
