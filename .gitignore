@@ -3,3 +3,5 @@
 .vscode
 *.png
 builddir/*
+# Vendored third-party checkout (tensorflow-imx), not part of this repo
+lib/
