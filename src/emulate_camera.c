@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
         perror("msgsnd error");
     }
 
-    printf("Image sent!\n");
+    printf("Image sent! uuid=%s pipeline=%d\n", data.uuid, data.pipeline_id);
 
     shmdt(shmaddr);
     fclose(fh);
