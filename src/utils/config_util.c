@@ -13,6 +13,27 @@ static ModuleParameter *get_param(const char *name) {
     return found_parameter;
 }
 
+/* Optional variants: return the fallback when the parameter is absent.
+   The strict accessors above exit the process on a missing key, which is right
+   for a parameter the module cannot run without, but wrong for one added after
+   a config was written -- without these, adding a parameter would break every
+   existing storage.vmem. */
+float get_param_float_or(const char *name, float fallback)
+{
+    ModuleParameter *p = get_param(name);
+    if (p == NULL || p->value_case != FLOAT_VALUE)
+        return fallback;
+    return p->float_value;
+}
+
+int get_param_int_or(const char *name, int fallback)
+{
+    ModuleParameter *p = get_param(name);
+    if (p == NULL || p->value_case != INT_VALUE)
+        return fallback;
+    return p->int_value;
+}
+
 int get_param_bool(const char *name)
 {   
     ModuleParameter *found_parameter = get_param(name);

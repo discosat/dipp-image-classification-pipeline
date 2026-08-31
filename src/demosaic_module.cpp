@@ -31,6 +31,16 @@ void module()
 
     int normalization_value = get_param_int("normalization_value");
 
+    /* Radiometric calibration. Optional so configs written before this existed
+       keep working; the defaults are the fitted values. */
+    int radiometric_mode = get_param_int_or("radiometric_mode", 1);
+    float calib_gain_r = get_param_float_or("calib_gain_r", 0.040321f);
+    float calib_gain_g = get_param_float_or("calib_gain_g", 0.031413f);
+    float calib_gain_b = get_param_float_or("calib_gain_b", 0.025168f);
+    float calib_off_r = get_param_float_or("calib_offset_r", 17.270f);
+    float calib_off_g = get_param_float_or("calib_offset_g", 36.860f);
+    float calib_off_b = get_param_float_or("calib_offset_b", 60.976f);
+
     if (normalization_value != 255 && normalization_value != 65535)
     {
         signal_error_and_exit(INVALID_NORMALIZATION_VALUE);
@@ -96,7 +106,44 @@ void module()
         // std::cout << "rotated_image = " << rotated_image << std::endl;
 
         cv::Mat normalized_Image;
-        cv::normalize(rotated_image, normalized_Image, 0, normalization_value, cv::NORM_MINMAX);
+        if (radiometric_mode == 0)
+        {
+            // Legacy behaviour, kept only so the old results can be
+            // reproduced. NORM_MINMAX takes its range from the whole frame's
+            // extremes, so it behaves completely differently depending on
+            // content: four of the five test frames already span 0..4096 and
+            // it is nearly a no-op, while a uniformly cloudy frame spans
+            // 3324..3838 and gets stretched 8x. That is what put all 99 tiles
+            // of the full-cloud frame into a single class.
+            cv::normalize(rotated_image, normalized_Image, 0, normalization_value, cv::NORM_MINMAX);
+        }
+        else
+        {
+            // Fixed per-band affine: absolute and scene-independent, so
+            // identical ground radiance maps to identical pixel values in
+            // every frame and a bright scene stays bright.
+            //
+            // Channel order: cvtColor(..., COLOR_BayerRG2BGR) nominally emits
+            // BGR, but that constant does not match this sensor's mosaic
+            // phase, so it swaps R and B and the array is in fact R,G,B.
+            // Verified against the raw mosaic -- channel 0 tracks the phase
+            // that is dark over water and channel 2 the one that is bright,
+            // which is only physical for R and B respectively. The gains
+            // below are therefore in R,G,B order.
+            //
+            // Defaults were fitted label-free, matching the pooled pixel
+            // statistics of the demosaiced frames to those of the EuroSAT
+            // corpus the models are trained on; the offsets rise toward blue,
+            // the signature of Rayleigh path radiance. See
+            // DIPP/analysis/stage4.5-models/calibration.json.
+            cv::Mat f;
+            rotated_image.convertTo(f, CV_32FC3);
+            cv::multiply(f, cv::Scalar(calib_gain_r, calib_gain_g, calib_gain_b), f);
+            cv::add(f, cv::Scalar(calib_off_r, calib_off_g, calib_off_b), f);
+            cv::min(f, (double)normalization_value, f);
+            cv::max(f, 0.0, f);
+            f.convertTo(normalized_Image, CV_16UC3);
+        }
 
         if (normalized_Image.empty() || normalized_Image.data == NULL)
         {

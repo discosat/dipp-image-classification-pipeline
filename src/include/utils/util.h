@@ -24,6 +24,10 @@ extern "C"
      */
     float get_param_float(const char *name);
 
+    float get_param_float_or(const char *name, float fallback);
+
+    int get_param_int_or(const char *name, int fallback);
+
     /**
      * Fetch integer parameter from module configuration.
      *
