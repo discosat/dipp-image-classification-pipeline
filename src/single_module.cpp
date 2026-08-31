@@ -148,9 +148,6 @@ void module()
         const char *cache_file_value_classifier = cache_filename_classifier.c_str();
         ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
         ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value_classifier);
-        ext_delegate_option.insert(&ext_delegate_option, "error_during_init", allow_cache_value);
-        ext_delegate_option.insert(&ext_delegate_option, "error_during_prepare", allow_cache_value);
-        ext_delegate_option.insert(&ext_delegate_option, "error_during_invoke", allow_cache_value);
 
         auto ext_delegate_ptr_classifier = TfLiteExternalDelegateCreate(&ext_delegate_option);
         logger_log(logger, LOG_INFO, "Delegate loaded.");
@@ -491,9 +488,6 @@ void module()
         const char *cache_file_value_segmentation = cache_filename_segmentation.c_str();
         ext_delegate_option_segmentation.insert(&ext_delegate_option_segmentation, allow_cache_key, allow_cache_value);
         ext_delegate_option_segmentation.insert(&ext_delegate_option_segmentation, cache_file_key, cache_file_value_segmentation);
-        ext_delegate_option_segmentation.insert(&ext_delegate_option_segmentation, "error_during_init", allow_cache_value);
-        ext_delegate_option_segmentation.insert(&ext_delegate_option_segmentation, "error_during_prepare", allow_cache_value);
-        ext_delegate_option_segmentation.insert(&ext_delegate_option_segmentation, "error_during_invoke", allow_cache_value);
         auto ext_delegate_ptr_segmentation = TfLiteExternalDelegateCreate(&ext_delegate_option_segmentation);
         logger_log(logger, LOG_INFO, "Segmentation delegate loaded.");
 

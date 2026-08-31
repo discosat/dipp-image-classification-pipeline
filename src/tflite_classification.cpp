@@ -102,10 +102,10 @@ void module()
     const char *cache_file_value = cache_filename.c_str();
     ext_delegate_option.insert(&ext_delegate_option, allow_cache_key, allow_cache_value);
     ext_delegate_option.insert(&ext_delegate_option, cache_file_key, cache_file_value);
-    ext_delegate_option.insert(&ext_delegate_option, "error_during_init", allow_cache_value);
-    ext_delegate_option.insert(&ext_delegate_option, "error_during_prepare", allow_cache_value);
-    ext_delegate_option.insert(&ext_delegate_option, "error_during_invoke", allow_cache_value);
 
+    /* NOTE: error_during_init/prepare/invoke are the VX delegate's error
+       INJECTION switches, not error handling. They were being set to the
+       same "true" string as the cache flag. */
     auto ext_delegate_ptr = TfLiteExternalDelegateCreate(&ext_delegate_option);
     logger_log(logger, LOG_INFO, "Delegate loaded.");
 
