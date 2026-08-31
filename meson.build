@@ -38,7 +38,7 @@ shared_library(
     include_directories: dirs,
     c_args: cflags,
     cpp_args: cppflags,
-    dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
+    dependencies: [rt_dep, proto_c_dep, tflite_dep, opencv_dep, uuid_dep],
 )
 
 # Shared library (SO)
@@ -48,7 +48,7 @@ shared_library(
     include_directories: dirs,
     c_args: cflags,
     cpp_args: cppflags,
-    dependencies: [rt_dep, proto_c_dep, tflite_dep, uuid_dep],
+    dependencies: [rt_dep, proto_c_dep, tflite_dep, opencv_dep, uuid_dep],
 )
 
 # Shared library (SO)

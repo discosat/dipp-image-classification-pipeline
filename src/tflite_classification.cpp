@@ -3,6 +3,7 @@
 #include "logger.h"
 
 #include <filesystem>
+#include <opencv2/opencv.hpp>
 #include <tensorflow/lite/delegates/external/external_delegate.h>
 #include <tensorflow/lite/interpreter.h>
 #include <tensorflow/lite/kernels/register.h>
@@ -22,6 +23,7 @@ enum ERROR_CODE
     INTERPRET_INIT = 2,
     TENSOR_ALLOC = 3,
     INFER_ERR = 4,
+    SHAPE_MISMATCH = 5,
 };
 
 /* START MODULE IMPLEMENTATION */
@@ -55,6 +57,14 @@ void module()
     std::unique_ptr<tflite::FlatBufferModel> model =
         tflite::FlatBufferModel::BuildFromFile(model_filename);
     logger_log(logger, LOG_INFO, "Built model from file.");
+    if (model == nullptr)
+    {
+        // BuildFromFile returns null for a missing or malformed file. Without
+        // this check the InterpreterBuilder below dereferences a null
+        // unique_ptr, which is undefined behaviour rather than an error.
+        logger_log(logger, LOG_ERROR, "Failed to load model file");
+        signal_error_and_exit(INTERPRET_INIT);
+    }
 
     // Define resolver
     logger_log(logger, LOG_INFO, "Defining resolver");
@@ -138,10 +148,9 @@ void module()
 
         logger_log(logger, LOG_INFO, "Getting metadata");
         Metadata *input_meta = get_metadata(i);
-        // int height = input_meta->height;
-        // int width = input_meta->width;
-        // int channels = input_meta->channels;
-        // int bits_pixel = input_meta->bits_pixel;
+        int height = input_meta->height;
+        int width = input_meta->width;
+        int channels = input_meta->channels;
         logger_log(logger, LOG_INFO, "Got metadata");
 
         logger_log(logger, LOG_INFO, "Getting image data");
@@ -154,11 +163,40 @@ void module()
         uint8_t *input_tensor = interpreter->typed_tensor<uint8_t>(input_index);
 
         TfLiteTensor *in_tensor = interpreter->tensor(input_index);
-        size_t expected_bytes = in_tensor->bytes;
 
-        // Copy image data to tensor
+        // The model states its own input geometry; the tile states its own.
+        // The previous code copied in_tensor->bytes out of the tile buffer
+        // without checking the tile was that large -- an out-of-bounds read
+        // the moment either side changed.
+        const int in_h = in_tensor->dims->data[1];
+        const int in_w = in_tensor->dims->data[2];
+        const int in_c = in_tensor->dims->data[3];
+        if (size != (size_t)height * width * channels || channels != in_c)
+        {
+            char msg[160];
+            snprintf(msg, sizeof(msg),
+                     "shape mismatch: tile %dx%dx%d (%zu bytes) vs tensor %dx%dx%d",
+                     height, width, channels, size, in_h, in_w, in_c);
+            logger_log(logger, LOG_ERROR, msg);
+            signal_error_and_exit(SHAPE_MISMATCH);
+        }
+
+        // Effort scales by downsampling the tile, not by changing the tile
+        // size: the tiler must keep emitting 224x224 so that the ground area
+        // per inference stays constant, otherwise a cheaper model simply gets
+        // handed more tiles and nothing is saved. INTER_AREA to match the
+        // downsampling used when the models were trained.
         logger_log(logger, LOG_INFO, "Copying image data to tensor.");
-        memcpy(input_tensor, input_image_data, expected_bytes);
+        cv::Mat tile(height, width, CV_8UC(channels), input_image_data);
+        if (height != in_h || width != in_w)
+        {
+            cv::Mat scaled(in_h, in_w, CV_8UC(in_c), input_tensor);
+            cv::resize(tile, scaled, cv::Size(in_w, in_h), 0, 0, cv::INTER_AREA);
+        }
+        else
+        {
+            memcpy(input_tensor, input_image_data, in_tensor->bytes);
+        }
         logger_log(logger, LOG_INFO, "Copied image data to tensor.");
 
         // infer and deal with the result

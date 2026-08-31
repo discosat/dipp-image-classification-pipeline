@@ -3,6 +3,7 @@
 #include "logger.h"
 
 #include <filesystem>
+#include <opencv2/opencv.hpp>
 #include <tensorflow/lite/delegates/external/external_delegate.h>
 #include <tensorflow/lite/interpreter.h>
 #include <tensorflow/lite/kernels/register.h>
@@ -17,6 +18,7 @@ enum ERROR_CODE
     INTERPRET_INIT = 2,
     TENSOR_ALLOC = 3,
     INFER_ERR = 4,
+    SHAPE_MISMATCH = 5,
 };
 
 /* START MODULE IMPLEMENTATION */
@@ -54,6 +56,13 @@ void module()
     std::unique_ptr<tflite::FlatBufferModel> model =
         tflite::FlatBufferModel::BuildFromFile(model_filename);
     logger_log(logger, LOG_INFO, "Built model from file.");
+    if (model == nullptr)
+    {
+        // Null means a missing or malformed file; the InterpreterBuilder below
+        // would otherwise dereference a null unique_ptr.
+        logger_log(logger, LOG_ERROR, "Failed to load model file");
+        signal_error_and_exit(INTERPRET_INIT);
+    }
 
     // Define resolver
     logger_log(logger, LOG_INFO, "Defining resolver");
@@ -114,6 +123,10 @@ void module()
         signal_error_and_exit(TENSOR_ALLOC);
     }
     uint8_t *input_tensor = interpreter->typed_input_tensor<uint8_t>(0);
+    const TfLiteTensor *in_tensor = interpreter->input_tensor(0);
+    const int in_h = in_tensor->dims->data[1];
+    const int in_w = in_tensor->dims->data[2];
+    const int in_c = in_tensor->dims->data[3];
     logger_log(logger, LOG_INFO, "Tensor allocated.");
 
     // Get quantization parameters
@@ -139,12 +152,33 @@ void module()
         size_t size = get_image_data(i, &input_image_data);
         logger_log(logger, LOG_INFO, "Got image data.");
 
-        // memcpy the entire output image into input tensor
+        // The previous code copied `size` bytes into the tensor without
+        // checking the tensor was that large -- a heap overflow the moment a
+        // model with a smaller input was configured.
+        if (size != (size_t)height * width * channels || channels != in_c)
+        {
+            char msg[160];
+            snprintf(msg, sizeof(msg),
+                     "shape mismatch: tile %dx%dx%d (%zu bytes) vs tensor %dx%dx%d",
+                     height, width, channels, size, in_h, in_w, in_c);
+            logger_log(logger, LOG_ERROR, msg);
+            signal_error_and_exit(SHAPE_MISMATCH);
+        }
+
+        // Effort scales by downsampling the tile the module is handed, so the
+        // ground area per inference stays constant. INTER_AREA matches the
+        // downsampling used in training.
         logger_log(logger, LOG_INFO, "Copying image data to tensor.");
-        memcpy(
-            input_tensor,
-            input_image_data,
-            size);
+        cv::Mat tile(height, width, CV_8UC(channels), input_image_data);
+        if (height != in_h || width != in_w)
+        {
+            cv::Mat scaled(in_h, in_w, CV_8UC(in_c), input_tensor);
+            cv::resize(tile, scaled, cv::Size(in_w, in_h), 0, 0, cv::INTER_AREA);
+        }
+        else
+        {
+            memcpy(input_tensor, input_image_data, in_tensor->bytes);
+        }
         logger_log(logger, LOG_INFO, "Copied image data to tensor.");
 
         // infer and deal with the result
@@ -156,7 +190,24 @@ void module()
         logger_log(logger, LOG_INFO, "Invoked");
 
         logger_log(logger, LOG_INFO, "Applying the segmentation mask.");
-        uint8_t *scores = interpreter->typed_output_tensor<uint8_t>(0);
+        uint8_t *raw_scores = interpreter->typed_output_tensor<uint8_t>(0);
+        const TfLiteTensor *out_t = interpreter->output_tensor(0);
+        const int out_h = out_t->dims->data[1];
+        const int out_w = out_t->dims->data[2];
+
+        // The mask is produced at the model's resolution. When the tile was
+        // downsampled for a cheaper effort level, the mask must be lifted back
+        // to the tile's resolution before it can index tile pixels -- the old
+        // code indexed scores[pix] over the tile's height*width and would run
+        // off the end of a smaller mask.
+        cv::Mat mask_small(out_h, out_w, CV_8UC1, raw_scores);
+        cv::Mat mask_full;
+        if (out_h != height || out_w != width)
+            cv::resize(mask_small, mask_full, cv::Size(width, height), 0, 0,
+                       cv::INTER_LINEAR);
+        else
+            mask_full = mask_small;
+        const uint8_t *scores = mask_full.data;
 
         int img_size = height * width * channels;
         int kept_pixels = img_size;
