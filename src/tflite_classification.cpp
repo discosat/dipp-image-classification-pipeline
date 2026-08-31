@@ -10,6 +10,7 @@
 #include <tensorflow/lite/model.h>
 #include <tensorflow/lite/optional_debug_tools.h>
 
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -109,14 +110,29 @@ void module()
     auto ext_delegate_ptr = TfLiteExternalDelegateCreate(&ext_delegate_option);
     logger_log(logger, LOG_INFO, "Delegate loaded.");
 
-    // Modify the graph with delegate
-    logger_log(logger, LOG_INFO, "Applying delegate");
-    if (interpreter->ModifyGraphWithDelegate(ext_delegate_ptr) != kTfLiteOk)
+    // Modify the graph with delegate.
+    //
+    // DIPP_NO_NPU=1 runs the same graph on the CPU instead. A model can be
+    // correct on a host interpreter and return one constant answer for every
+    // tile through the NPU, and from the outside those look identical -- the
+    // module logs a confident prediction either way. Being able to switch the
+    // accelerator off in place is the only way to tell "this model is wrong"
+    // from "this delegate mishandles this model" without reflashing anything.
+    const char *no_npu = getenv("DIPP_NO_NPU");
+    if (no_npu && no_npu[0] == '1')
     {
-        logger_log(logger, LOG_ERROR, "Failed to apply delegate to graph");
-        signal_error_and_exit(INTERPRET_INIT);
+        logger_log_print(logger, LOG_INFO, "DIPP_NO_NPU=1: running on CPU");
     }
-    logger_log(logger, LOG_INFO, "Delegate applied to graph.");
+    else
+    {
+        logger_log(logger, LOG_INFO, "Applying delegate");
+        if (interpreter->ModifyGraphWithDelegate(ext_delegate_ptr) != kTfLiteOk)
+        {
+            logger_log(logger, LOG_ERROR, "Failed to apply delegate to graph");
+            signal_error_and_exit(INTERPRET_INIT);
+        }
+        logger_log(logger, LOG_INFO, "Delegate applied to graph.");
+    }
 
     // Allocate the tensors
     logger_log(logger, LOG_INFO, "allocating tensors");
