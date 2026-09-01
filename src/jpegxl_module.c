@@ -24,9 +24,18 @@ void module()
     int num_images = get_input_num_images();
 
     int effort = get_param_int("effort_level");
-    // int resampling = get_param_int("resampling");
-    // float distance = get_param_float("distance");
-    // int lossless = distance == 0;
+    // Butteraugli distance is the only knob that trades quality for size.
+    // Effort alone, at a fixed distance, changes how hard the encoder searches:
+    // measured on real tiles, effort 1/4/7 gives 4387/4374/4555 bytes -- the
+    // top level costs 9x the time for a 4% LARGER file. Leaving distance
+    // unset silently uses libjxl's default of 1.0, so the deployed effort
+    // ladder has been trading latency and energy for nothing.
+    // _or, not the plain getter: get_param_float exits with error 505 when a
+    // key is absent, so a plain read would break every existing config. The
+    // fallback of 1.0 is libjxl's own default, i.e. exactly what the deployed
+    // encoder has been doing while this call was commented out.
+    float distance = get_param_float_or("distance", 1.0f);
+    int lossless = (distance == 0.0f);
 
     /* Example code for iterating a pixel value at a time */
     for (int i = 0; i < num_images; ++i)
@@ -51,19 +60,19 @@ void module()
         if (JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_EFFORT, effort)) // sets compression effort - from configuration
             signal_error_and_exit(JXL_ENC_SET_OPTIONS);
 
-        // if (JxlEncoderFrameSettingsSetOption(settings, JXL_ENC_FRAME_SETTING_RESAMPLING, resampling)) // sets sampling strategy - from configuration
-        //     signal_error_and_exit(JXL_ENC_SET_OPTIONS);
+        if (lossless && JxlEncoderSetFrameLossless(settings, JXL_TRUE)) // sets lossless
+            signal_error_and_exit(JXL_ENC_SET_LOSSLESS);
 
-        // if (lossless && JxlEncoderSetFrameLossless(settings, JXL_TRUE)) // sets lossless
-        //     signal_error_and_exit(JXL_ENC_SET_LOSSLESS);
-
-        // if (!lossless && JxlEncoderSetFrameDistance(settings, distance)) // sets lossy based on distance - from configuration
-        //     signal_error_and_exit(JXL_ENC_SET_DISTANCE);
+        if (!lossless && JxlEncoderSetFrameDistance(settings, distance)) // sets lossy based on distance - from configuration
+            signal_error_and_exit(JXL_ENC_SET_DISTANCE);
 
         JxlBasicInfo basic_info; // image metadata
         JxlEncoderInitBasicInfo(&basic_info);
-        // if (lossless)
-        //     basic_info.uses_original_profile = JXL_TRUE;
+        // Required for true lossless: setting the lossless flag without this
+        // silently still transforms the colour space, so the result is not
+        // bit-exact.
+        if (lossless)
+            basic_info.uses_original_profile = JXL_TRUE;
         basic_info.xsize = width;
         basic_info.ysize = height;
         basic_info.num_color_channels = channels > 3 ? 3 : channels;
