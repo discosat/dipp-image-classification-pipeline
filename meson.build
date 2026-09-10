@@ -10,6 +10,9 @@ proto_c_dep = meson.get_compiler('c').find_library('protobuf-c', required: false
 rt_dep = meson.get_compiler('c').find_library('rt', required: false)
 # jxl_dep = meson.get_compiler('cpp').find_library('libjxl', required: true)
 jxl_dep = dependency('libjxl', required: true)
+# openjpeg 2.4.0 is already in the SDK sysroot and on the board, so the
+# JPEG 2000 encoder adds no new runtime dependency.
+openjp2_dep = dependency('libopenjp2', required: true)
 jxl_threads_dep = dependency('libjxl_threads', required: true)
 uuid_dep = meson.get_compiler('c').find_library('uuid', required: false)
 tflite_dep = dependency('tensorflow2-lite')
@@ -59,6 +62,15 @@ shared_library(
     c_args: cflags,
     cpp_args: cppflags,
     dependencies: [rt_dep, proto_c_dep, jxl_dep, jxl_threads_dep,uuid_dep],
+)
+
+# Shared library (SO)
+shared_library(
+    'jpeg2000_module',
+    ['src/jpeg2000_module.c'] + sources,
+    include_directories: dirs,
+    c_args: cflags,
+    dependencies: [rt_dep, proto_c_dep, openjp2_dep, uuid_dep],
 )
 
 # Shared library (SO)

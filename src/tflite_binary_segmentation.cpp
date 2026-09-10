@@ -110,6 +110,17 @@ void module()
     }
     logger_log(logger, LOG_INFO, "Interpreter built.");
 
+    // NPU delegate is optional so the same build can be run on the A53 cores
+    // for comparison. The board's segmentation output sits above 0.5 on every
+    // pixel of a cloud-free frame, while the identical flatbuffer on x86 CPU
+    // returns 3.3% cloud -- so the question is whether the VX delegate is
+    // computing something different, which is only answerable by running the
+    // same graph without it. Section IV-A3 already records this failure mode
+    // for EfficientNet's swish layers.
+    int use_npu = get_param_int_or("use_npu", 1);
+    if (!use_npu)
+        logger_log_print(logger, LOG_INFO, "NPU delegate DISABLED (CPU inference)");
+
     // Load the custom delegate
     logger_log(logger, LOG_INFO, "Loading delegate");
     auto ext_delegate_option =
@@ -133,13 +144,16 @@ void module()
     logger_log(logger, LOG_INFO, "Delegate loaded.");
 
     // Modify the graph with delegate
-    logger_log(logger, LOG_INFO, "Applying delegate");
-    if (interpreter->ModifyGraphWithDelegate(ext_delegate_ptr) != kTfLiteOk)
+    if (use_npu)
     {
-        logger_log(logger, LOG_ERROR, "Failed to apply delegate to graph");
-        signal_error_and_exit(INTERPRET_INIT);
+        logger_log(logger, LOG_INFO, "Applying delegate");
+        if (interpreter->ModifyGraphWithDelegate(ext_delegate_ptr) != kTfLiteOk)
+        {
+            logger_log(logger, LOG_ERROR, "Failed to apply delegate to graph");
+            signal_error_and_exit(INTERPRET_INIT);
+        }
+        logger_log(logger, LOG_INFO, "Delegate applied to graph.");
     }
-    logger_log(logger, LOG_INFO, "Delegate applied to graph.");
 
     // Allocate the tensors and get the input tensor
     logger_log(logger, LOG_INFO, "allocating tensors");
