@@ -60,18 +60,38 @@ typedef struct
     size_t pos;
 } MemSink;
 
+/* Grow the sink so that `need` bytes are addressable from offset 0.
+ *
+ * openjpeg reserves space with skip/seek and backfills packet-length markers
+ * later, so the position can legitimately move beyond what has been written.
+ * Growing only inside mem_write was not enough: mem_skip advanced pos and len
+ * past cap without allocating, and the module then read sink.buf[0..len) past
+ * the end of the allocation. That is a buffer overrun for any layer count; it
+ * simply did not happen to fire at 1 or 5 layers, and crashed the module
+ * process (MODULE_EXIT_CRASH) at 2 and 3.
+ */
+static int mem_reserve(MemSink *s, size_t need)
+{
+    if (need <= s->cap)
+        return 1;
+    size_t want = need * 2;
+    unsigned char *nb = (unsigned char *)realloc(s->buf, want);
+    if (nb == NULL)
+        return 0;
+    /* Zero the new region: skipped bytes are read back when markers are
+     * backfilled, and uninitialised memory would make the codestream
+     * nondeterministic. */
+    memset(nb + s->cap, 0, want - s->cap);
+    s->buf = nb;
+    s->cap = want;
+    return 1;
+}
+
 static OPJ_SIZE_T mem_write(void *p_buffer, OPJ_SIZE_T n, void *user)
 {
     MemSink *s = (MemSink *)user;
-    if (s->pos + n > s->cap)
-    {
-        size_t want = (s->pos + n) * 2;
-        unsigned char *nb = (unsigned char *)realloc(s->buf, want);
-        if (nb == NULL)
-            return (OPJ_SIZE_T)-1;
-        s->buf = nb;
-        s->cap = want;
-    }
+    if (!mem_reserve(s, s->pos + n))
+        return (OPJ_SIZE_T)-1;
     memcpy(s->buf + s->pos, p_buffer, n);
     s->pos += n;
     if (s->pos > s->len)
@@ -82,6 +102,8 @@ static OPJ_SIZE_T mem_write(void *p_buffer, OPJ_SIZE_T n, void *user)
 static OPJ_OFF_T mem_skip(OPJ_OFF_T n, void *user)
 {
     MemSink *s = (MemSink *)user;
+    if (!mem_reserve(s, (size_t)(s->pos + n)))
+        return (OPJ_OFF_T)-1;
     s->pos += n;
     if (s->pos > s->len)
         s->len = s->pos;
@@ -91,6 +113,8 @@ static OPJ_OFF_T mem_skip(OPJ_OFF_T n, void *user)
 static OPJ_BOOL mem_seek(OPJ_OFF_T n, void *user)
 {
     MemSink *s = (MemSink *)user;
+    if (!mem_reserve(s, (size_t)n))
+        return OPJ_FALSE;
     s->pos = (size_t)n;
     return OPJ_TRUE;
 }
