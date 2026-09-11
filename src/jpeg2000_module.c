@@ -102,9 +102,17 @@ static OPJ_SIZE_T mem_write(void *p_buffer, OPJ_SIZE_T n, void *user)
 static OPJ_OFF_T mem_skip(OPJ_OFF_T n, void *user)
 {
     MemSink *s = (MemSink *)user;
-    if (!mem_reserve(s, (size_t)(s->pos + n)))
+    /* n is signed and openjpeg rewinds with negative skips. Computing the new
+     * position in size_t underflows to an astronomical value in that case,
+     * which made mem_reserve attempt a gigantic realloc, fail, and abort the
+     * encode -- a regression over the original `s->pos += n`, which handled
+     * negative offsets correctly. Do the arithmetic signed. */
+    OPJ_OFF_T newpos = (OPJ_OFF_T)s->pos + n;
+    if (newpos < 0)
         return (OPJ_OFF_T)-1;
-    s->pos += n;
+    if (!mem_reserve(s, (size_t)newpos))
+        return (OPJ_OFF_T)-1;
+    s->pos = (size_t)newpos;
     if (s->pos > s->len)
         s->len = s->pos;
     return n;
@@ -113,6 +121,8 @@ static OPJ_OFF_T mem_skip(OPJ_OFF_T n, void *user)
 static OPJ_BOOL mem_seek(OPJ_OFF_T n, void *user)
 {
     MemSink *s = (MemSink *)user;
+    if (n < 0)
+        return OPJ_FALSE;
     if (!mem_reserve(s, (size_t)n))
         return OPJ_FALSE;
     s->pos = (size_t)n;
