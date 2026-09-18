@@ -64,11 +64,21 @@ typedef struct
  *
  * openjpeg reserves space with skip/seek and backfills packet-length markers
  * later, so the position can legitimately move beyond what has been written.
- * Growing only inside mem_write was not enough: mem_skip advanced pos and len
- * past cap without allocating, and the module then read sink.buf[0..len) past
- * the end of the allocation. That is a buffer overrun for any layer count; it
- * simply did not happen to fire at 1 or 5 layers, and crashed the module
- * process (MODULE_EXIT_CRASH) at 2 and 3.
+ * Growing only inside mem_write would leave mem_skip free to advance pos and
+ * len past cap without allocating, and the module then reads sink.buf[0..len)
+ * when handing the codestream to append_result_image. Reserving here closes
+ * that off.
+ *
+ * This is defensive, not a fix for an observed failure -- and the record needs
+ * to be straight, because it was briefly written up as one. The
+ * MODULE_EXIT_CRASH (600201) that prompted it was not in this module at all:
+ * err_current_module is i+1, so 600201 is pipeline 2 module index 0, which is
+ * libdemosaic. The board had leaked 61 SysV segments holding 1.59 GB of its
+ * 1.95 GB (DIPP's STORAGE_MEM path detaches without IPC_RMID), so the first
+ * module to claim a full-resolution frame died, and every encoder config failed
+ * identically whatever its parameters. All 16 grid configs encode 99 tiles
+ * clean under AddressSanitizer against openjpeg 2.4 on the host, at every
+ * quality-layer count.
  */
 static int mem_reserve(MemSink *s, size_t need)
 {
@@ -103,10 +113,9 @@ static OPJ_OFF_T mem_skip(OPJ_OFF_T n, void *user)
 {
     MemSink *s = (MemSink *)user;
     /* n is signed and openjpeg rewinds with negative skips. Computing the new
-     * position in size_t underflows to an astronomical value in that case,
-     * which made mem_reserve attempt a gigantic realloc, fail, and abort the
-     * encode -- a regression over the original `s->pos += n`, which handled
-     * negative offsets correctly. Do the arithmetic signed. */
+     * position in size_t would underflow to an astronomical value in that case
+     * and make mem_reserve attempt a gigantic realloc, so do the arithmetic
+     * signed. */
     OPJ_OFF_T newpos = (OPJ_OFF_T)s->pos + n;
     if (newpos < 0)
         return (OPJ_OFF_T)-1;

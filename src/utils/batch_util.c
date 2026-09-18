@@ -96,6 +96,20 @@ void initialize()
 {
     result->batch_size = 0;
     result->num_images = 0;
+    /* `result` points at an ImageBatch declared uninitialised on run()'s stack,
+     * and append_result_image only assigns result->data on its first call. A
+     * module that legitimately keeps NOTHING therefore reached finalize() with
+     * a garbage pointer and freed it -- MODULE_EXIT_CRASH.
+     *
+     * Retaining nothing is not an error, it is a normal outcome: measured on
+     * the board, qat_a050r224 classified all 99 tiles of a Copenhagen frame as
+     * something other than Residential (36 PermanentCrop, 15 SeaLake, 15
+     * AnnualCrop, ...), so the keep-set was empty and the pipeline died. Open
+     * ocean, full cloud cover, or any scene lacking the configured class does
+     * the same thing in flight. The neighbouring rung survived only because it
+     * happened to predict the configured class somewhere in the frame.
+     */
+    result->data = NULL;
     result->pipeline_id = input->pipeline_id;
     result->priority = input->priority;
     result->mtype = input->mtype;
