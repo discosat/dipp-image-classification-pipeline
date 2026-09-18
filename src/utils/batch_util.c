@@ -94,6 +94,15 @@ void append_result_image(unsigned char *data, uint32_t data_size, Metadata *meta
 
 void initialize()
 {
+    /* `result` is an ImageBatch declared uninitialised on run()'s stack. Only
+     * the fields set below and in finalize() were ever written, so whatever
+     * the module did not touch -- filename in STORAGE_MEM, shmid in
+     * STORAGE_MMAP -- went back to the daemon as stack garbage, and the daemon
+     * strcpy'd the filename. Start from zero and from the input's storage
+     * identity, so an untouched field means "unchanged", never "random". */
+    memset(result, 0, sizeof(*result));
+    result->shmid = input->shmid;
+    strncpy(result->filename, input->filename, sizeof(result->filename) - 1);
     result->batch_size = 0;
     result->num_images = 0;
     /* `result` points at an ImageBatch declared uninitialised on run()'s stack,

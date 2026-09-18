@@ -118,7 +118,7 @@ void finalize()
             }
 
             void *shmaddr = shmat(new_shmid, NULL, 0);
-            if (shmaddr == NULL)
+            if (shmaddr == (void *)-1)   /* shmat fails with -1, never NULL */
             {
                 signal_error_and_exit(309);
             }

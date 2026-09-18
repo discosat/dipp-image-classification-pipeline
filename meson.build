@@ -67,7 +67,7 @@ shared_library(
 # Shared library (SO)
 shared_library(
     'jpeg2000_module',
-    ['src/jpeg2000_module.c'] + sources,
+    ['src/jpeg2000_module.c', 'src/utils/j2k_encode.c'] + sources,
     include_directories: dirs,
     c_args: cflags,
     dependencies: [rt_dep, proto_c_dep, openjp2_dep, uuid_dep],
@@ -115,19 +115,21 @@ shared_library(
 # Shared library (SO)
 shared_library(
     'single_module',
-    ['src/single_module.cpp'] + sources,
+    ['src/single_module.cpp', 'src/utils/j2k_encode.c'] + sources,
     include_directories: dirs,
     c_args: cflags,
     cpp_args: cppflags,
-    dependencies: [rt_dep, proto_c_dep, opencv_dep, tflite_dep, jxl_dep, uuid_dep],
+    dependencies: [rt_dep, proto_c_dep, opencv_dep, tflite_dep, openjp2_dep, uuid_dep],
 )
 
 # Shared library (SO)
+# The fault-injection module is built WITHOUT optimisation: at -O3 the
+# compiler deleted most of its faults as undefined behaviour (see the file).
 shared_library(
     'crash_and_burn',
     ['src/crash_and_burn.c'] + sources,
     include_directories: dirs,
-    c_args: cflags,
+    c_args: ['-Wall', '-g', '-O0', '-fno-builtin'],
     dependencies: [rt_dep, proto_c_dep, uuid_dep],
 )
 
