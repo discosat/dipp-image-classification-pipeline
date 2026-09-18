@@ -81,29 +81,37 @@ void module()
             signal_error_and_exit(OPENCV_DEM_ERR);
         }
 
-        /* Apply vertical flip to match camera orientation */
-        // cv::Mat finalImage;
-        // cv::flip(demosaicedImage, finalImage, 0);  // 0 means vertical flip
-
-        cv::Point2f center(width / 2.0f, height / 2.0f);
-        double angle = 180;
-        double scale = 1.0;
-
-        cv::Mat rotation_matrix = cv::getRotationMatrix2D(center, angle, scale);
-
-        if (rotation_matrix.empty())
-        {
-            signal_error_and_exit(OPNECV_MAT_ERR);
-        }
+        /* 180 degree rotation to match camera orientation.
+         *
+         * This used to be warpAffine with getRotationMatrix2D(center, 180, 1).
+         * With the centre at (w/2, h/2) that maps source column x to 2464-x,
+         * so source column 0 lands off the image and destination column 0
+         * (and row 0) is filled with the border value: a one-pixel shift plus
+         * a black edge that the host replica (cv2.rotate) never had, and a
+         * full bilinear resample of a 30 MB image for what is a flip. */
         cv::Mat rotated_image;
-        cv::warpAffine(demosaicedImage, rotated_image, rotation_matrix, cv::Size(width, height));
+        cv::rotate(demosaicedImage, rotated_image, cv::ROTATE_180);
 
         if (rotated_image.empty() || rotated_image.data == NULL)
         {
-            signal_error_and_exit(OPENCV_ROT_ERR);
+            signal_error_and_exit(OPNECV_MAT_ERR);
         }
 
-        // std::cout << "rotated_image = " << rotated_image << std::endl;
+        /* Output container: 8-bit when the rendering targets 255, else 16. */
+        int output_bits_pixel = 8;
+        if (normalization_value == 255)
+        {
+            output_bits_pixel = 8;
+        }
+        else if (normalization_value == 65535)
+        {
+            output_bits_pixel = 16;
+        }
+        else
+        {
+            signal_error_and_exit(INVALID_NORMALIZATION_VALUE);
+        }
+        int out_type = output_bits_pixel == 8 ? CV_8UC3 : CV_16UC3;
 
         cv::Mat normalized_Image;
         if (radiometric_mode == 0)
@@ -115,7 +123,28 @@ void module()
             // it is nearly a no-op, while a uniformly cloudy frame spans
             // 3324..3838 and gets stretched 8x. That is what put all 99 tiles
             // of the full-cloud frame into a single class.
-            cv::normalize(rotated_image, normalized_Image, 0, normalization_value, cv::NORM_MINMAX);
+            cv::Mat n16;
+            cv::normalize(rotated_image, n16, 0, normalization_value, cv::NORM_MINMAX);
+            n16.convertTo(normalized_Image, out_type);
+        }
+        else if (calib_gain_r == calib_gain_g && calib_gain_g == calib_gain_b &&
+                 calib_off_r == 0.0f && calib_off_g == 0.0f && calib_off_b == 0.0f)
+        {
+            // The frozen rendering (module_1.yaml): one gain, zero offset,
+            // clip(x * g, 0, normalization_value). convertTo does the multiply,
+            // the round-to-nearest and the saturation in ONE pass over the
+            // image, straight into the output container. The per-channel
+            // path below did the same arithmetic as six full passes over a
+            // 60 MB float copy (convertTo(CV_32F), multiply, add, min, max,
+            // convertTo back): +320 ms and ~94 uWh per frame on the board
+            // (DIPP/analysis/stage4.5-models/README.md, "Why demosaic takes
+            // 690 ms"). For 8-bit output saturate_cast clips at 255 itself;
+            // for 16-bit the clip at normalization_value is applied after.
+            rotated_image.convertTo(normalized_Image, out_type, calib_gain_r);
+            if (output_bits_pixel == 16)
+            {
+                cv::min(normalized_Image, (double)normalization_value, normalized_Image);
+            }
         }
         else
         {
@@ -136,13 +165,15 @@ void module()
             // corpus the models are trained on; the offsets rise toward blue,
             // the signature of Rayleigh path radiance. See
             // DIPP/analysis/stage4.5-models/calibration.json.
+            //
+            // Kept for that use only; it is the slow path (see above).
             cv::Mat f;
             rotated_image.convertTo(f, CV_32FC3);
             cv::multiply(f, cv::Scalar(calib_gain_r, calib_gain_g, calib_gain_b), f);
             cv::add(f, cv::Scalar(calib_off_r, calib_off_g, calib_off_b), f);
             cv::min(f, (double)normalization_value, f);
             cv::max(f, 0.0, f);
-            f.convertTo(normalized_Image, CV_16UC3);
+            f.convertTo(normalized_Image, out_type);
         }
 
         if (normalized_Image.empty() || normalized_Image.data == NULL)
@@ -172,21 +203,6 @@ void module()
         // {
         //     std::cout << "output_image_data[" << idx << "] = " << static_cast<int>(output_image_data[idx]) << std::endl;
         // }
-
-        int output_bits_pixel;
-
-        if (normalization_value == 255)
-        {
-            output_bits_pixel = 8; // 8-bit normalization
-        }
-        else if (normalization_value == 65535)
-        {
-            output_bits_pixel = 16; // 16-bit normalization
-        }
-        else
-        {
-            signal_error_and_exit(INVALID_NORMALIZATION_VALUE);
-        }
 
         Metadata new_meta = METADATA__INIT;
         if (clone_metadata(input_meta, &new_meta) != 0)

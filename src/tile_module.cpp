@@ -12,6 +12,7 @@ enum ERROR_CODE
     INTERPRET_INIT = 2,
     TENSOR_ALLOC = 3,
     INFER_ERR = 4,
+    INVALID_INPUT_VALUES = 8,   // buffer size fits neither an 8- nor a 16-bit container
 };
 
 /* START MODULE IMPLEMENTATION */
@@ -51,34 +52,54 @@ void module()
         size_t size = get_image_data(i, &input_image_data);
         logger_log(logger, LOG_INFO, "Got image data.");
 
-        // images come in 16 bit containers but only use bits_pixel bits
-        // parse the data accordingly into uint8_t array
-        size_t parsed_size = size / 2; // number of output pixels
-        uint8_t *parsed_data = (uint8_t *)malloc(parsed_size);
-        if (parsed_data == NULL)
+        // Samples arrive either as 8-bit bytes (the demosaic stage's output
+        // for a 255 rendering, since 2026-09-17) or in 16-bit containers that
+        // use only bits_pixel bits. An 8-bit input is used in place; a 16-bit
+        // one is parsed down to uint8_t.
+        size_t n_samples = (size_t)width * height * channels;
+        uint8_t *parsed_data;
+        bool parsed_owned;
+        if (size == n_samples)
         {
-            signal_error_and_exit(MALLOC_ERR);
+            parsed_data = input_image_data;
+            parsed_owned = false;
         }
-
-        if (input_meta->bits_pixel <= 8)
+        else if (size == 2 * n_samples)
         {
-            for (size_t pix = 0; pix < parsed_size; pix++)
+            size_t parsed_size = n_samples;
+            parsed_data = (uint8_t *)malloc(parsed_size);
+            parsed_owned = true;
+            if (parsed_data == NULL)
             {
-                // take the low byte of each 16-bit container (adjust if your data uses high byte)
-                parsed_data[pix] = input_image_data[2 * pix];
+                signal_error_and_exit(MALLOC_ERR);
+            }
+
+            if (input_meta->bits_pixel <= 8)
+            {
+                for (size_t pix = 0; pix < parsed_size; pix++)
+                {
+                    // take the low byte of each 16-bit container (adjust if your data uses high byte)
+                    parsed_data[pix] = input_image_data[2 * pix];
+                }
+            }
+            else
+            {
+                // Convert 16-bit samples down to 8-bit consistently (right-shift)
+                int shift = input_meta->bits_pixel - 8;
+                if (shift < 0)
+                    shift = 0;
+                for (size_t pix = 0; pix < parsed_size; pix++)
+                {
+                    uint16_t val = (uint16_t)input_image_data[2 * pix] | ((uint16_t)input_image_data[2 * pix + 1] << 8);
+                    parsed_data[pix] = (uint8_t)(val >> shift);
+                }
             }
         }
         else
         {
-            // Convert 16-bit samples down to 8-bit consistently (right-shift)
-            int shift = input_meta->bits_pixel - 8;
-            if (shift < 0)
-                shift = 0;
-            for (size_t pix = 0; pix < parsed_size; pix++)
-            {
-                uint16_t val = (uint16_t)input_image_data[2 * pix] | ((uint16_t)input_image_data[2 * pix + 1] << 8);
-                parsed_data[pix] = (uint8_t)(val >> shift);
-            }
+            // Neither container size fits the declared geometry: refuse rather
+            // than tile a buffer of the wrong shape.
+            signal_error_and_exit(INVALID_INPUT_VALUES);
         }
 
         int tile_bytes = tile_height * tile_width * channels * sizeof(uint8_t);
@@ -141,7 +162,8 @@ void module()
         // Free the input image
         logger_log(logger, LOG_INFO, "Freeing input memory.");
         free(input_image_data);
-        free(parsed_data);
+        if (parsed_owned)
+            free(parsed_data);
         logger_log(logger, LOG_INFO, "Freed input memory.");
 
         logger_log(logger, LOG_INFO, "Full image finished");
