@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 {
     if (argc < 5)
     {
-        printf("Missing arguments: Expected <num_images> <pipeline_id> <observation_id> <image_name>");
+        printf("Missing arguments: Expected <num_images> <pipeline_id> <observation_id> <image_name> [slo_s]\n");
         return -1;
     }
 
@@ -33,11 +33,21 @@ int main(int argc, char *argv[])
     data.num_images = atoi(argv[1]);
     data.pipeline_id = atoi(argv[2]);
 
-    // generate a random latency between 60 and 120 seconds
-    srand(time(0));
-    // int latency = rand() % 60 + 60;
-    // 1 minute to process query
+    // Deadline horizon in seconds, i.e. the SLO this frame is fed with.
+    // Optional 5th argument: the trace replay gives each frame its own class
+    // (urgent scenes over a tasked science target vs routine ones), which is
+    // what makes the EDF priority queue reorder anything at all -- with one
+    // value for every frame, EDF reduces to FIFO. Default 60 s keeps every
+    // existing caller (run.sh, bench scripts) behaving exactly as before.
     int latency = 60;
+    if (argc > 5)
+    {
+        int slo = atoi(argv[5]);
+        if (slo > 0)
+            latency = slo;
+        else
+            printf("Ignoring non-positive slo_s '%s'; using %d s\n", argv[5], latency);
+    }
     // get current time in seconds
     struct timespec time;
     if (clock_gettime(CLOCK_MONOTONIC, &time) < 0)
