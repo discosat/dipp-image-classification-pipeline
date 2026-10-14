@@ -58,8 +58,8 @@ int main(int argc, char *argv[])
     // Absolute deadline in CLOCK_MONOTONIC microseconds. Previously whole
     // seconds, which quantised every deadline to +/-1000 ms -- coarser than the
     // 600 ms the paper claims to resolve.
-    data.priority = (int64_t)time.tv_sec * 1000000 + (int64_t)time.tv_nsec / 1000
-                    + (int64_t)latency * 1000000;
+    data.capture_us = (int64_t)time.tv_sec * 1000000 + (int64_t)time.tv_nsec / 1000;
+    data.priority = data.capture_us + (int64_t)latency * 1000000;
     data.progress = -1;                    // default progress
     data.filename[0] = '\0';               // no filename needed
     data.data = NULL;                      // no data needed

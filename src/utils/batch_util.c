@@ -121,6 +121,7 @@ void initialize()
     result->data = NULL;
     result->pipeline_id = input->pipeline_id;
     result->priority = input->priority;
+    result->capture_us = input->capture_us;
     result->mtype = input->mtype;
     result->storage_mode = input->storage_mode;
     strcpy(result->uuid, input->uuid);

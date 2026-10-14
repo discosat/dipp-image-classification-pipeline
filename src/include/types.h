@@ -20,6 +20,12 @@ typedef struct ImageBatch
     int64_t priority;         /* absolute deadline, CLOCK_MONOTONIC MICROSECONDS.
                                  MUST match DIPP src/include/image/image_batch.h: this struct
                                  crosses the SysV message queue as raw bytes. */
+    int64_t capture_us;       /* capture time, CLOCK_MONOTONIC MICROSECONDS (set by the
+                                 producer). The scheduler reads arrival cadence and each
+                                 frame's own deadline window (priority - capture_us) from
+                                 it. MUST match the other copy of this struct (DIPP
+                                 src/include/image/image_batch.h, tf-dipp-module
+                                 src/include/types.h): it crosses the message queue raw. */
     unsigned char *data;      /* address to image data (in shared memory) */
     char filename[111];       /* filename of the image data */
     int shmid;                /* shared memory id for the image data */
